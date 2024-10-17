@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "supplements"
+version = "0.1.0"
+description = ""
+authors = [
+    "RyanDoesMath <vcz2aj@uvahealth.org>",
+    "mattbeck1 <mtb2tgk@virginia.edu>",
+    "hvalenty <unc6kr@virginia.edu>",
+    "charbelmarche33 <cmarche@mail.umw.edu>",
+]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pillow = "^11.0.0"
+numpy = "^2.1.2"
+ruff = "^0.6.9"
+ultralytics = "^8.3.15"
+opencv-python = "^4.10.0.84"
+pandas = "^2.2.3"
+tqdm = "^4.66.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
