@@ -232,9 +232,7 @@ class BoundingBox:
             bottom=new_bottom,
         )
 
-    def to_yolo(
-        self, image_width: int, image_height: int, category_to_id: Dict[str, int]
-    ) -> str:
+    def to_yolo(self, image_width: int, image_height: int) -> str:
         """Writes the data from this `BoundingBox` into a yolo formatted string.
 
         Args :
@@ -243,12 +241,12 @@ class BoundingBox:
             `image_height` (int):
                 The image's height that this boundingbox belongs to.
             `category_to_id` (Dict[str, int]):
-                A dictionary that maps the category string to an id (integer).
+                A dictionary that maps the category string to an id (integer). Removed at this moment.
 
         Returns:
             A string that encodes this `BoundingBox`'s data for a single line in a yolo label file.
         """
-        c = category_to_id[self.category]
+        c = self.category
         x, y = self.center
         x /= image_width
         y /= image_height
