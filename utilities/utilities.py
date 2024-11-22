@@ -10,7 +10,7 @@ def draw_bboxes_with_translucence(
     image: Image.Image,
     bounding_boxes: List["BoundingBox"],
     locations_are_relative: bool,
-    colors: Optional[Dict[str, Tuple[int, int, int]]],
+    colors: Optional[Dict[str, Tuple[int, int, int]]] = None,
     alpha: int = 40,
 ) -> Image.Image:
     """Draws bounding boxes on an image with a translucent fill.
