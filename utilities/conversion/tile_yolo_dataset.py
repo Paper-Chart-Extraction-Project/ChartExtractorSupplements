@@ -70,6 +70,32 @@ def read_input_dataset_path(parser: ArgumentParser):
     return input_path.resolve()
 
 
+def validate_yolo_dataset(input_dataset_path: Path):
+    """Ensures that the yolo dataset is setup correctly.
+
+    Args:
+        input_dataaset_path (Path):
+            The path to the potential yolo dataset.
+
+    Raises:
+        Exception:
+            If the YOLO dataset is not valid.
+    """
+    images_path: Path = input_dataset_path / "images"
+    labels_path: Path = input_dataset_path / "labels"
+
+    if not images_path.exists() or not images_path.is_dir():
+        raise Exception(
+            f"Path to images does not exist, or is not a directory: {str(images_path)}."
+        )
+    if not labels_path.exists() or not labels_path.is_dir():
+        raise Exception(
+            f"Path to labels does not exist, or is not a directory: {str(labels_path)}"
+        )
+    splits = next(os.walk(labels_path))[1]
+    print(splits)
+
+
 input_dataset_path: Path = read_input_dataset_path(parser)
 
 images: Dict[str, Image.Image] = {
