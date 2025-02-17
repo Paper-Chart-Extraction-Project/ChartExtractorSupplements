@@ -1,22 +1,7 @@
 """Tiles a yolo dataset."""
 
-from pathlib import Path
-import sys
-import os
-
-sys.path.append(
-    os.path.join(
-        Path(os.path.dirname(__file__)),
-        "..",
-        "..",
-        "..",
-        "GitHub",
-        "ChartExtractor",
-        "src",
-    )
-)
-
 # Built-in Imports
+import argparse
 from glob import glob
 from pathlib import Path
 from PIL import Image
@@ -26,8 +11,8 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple
 
 # Internal Imports
-from utilities.annotations import BoundingBox, Keypoint
-from utilities.tiling import (
+from ChartExtractor.utilities.annotations import BoundingBox, Keypoint
+from ChartExtractor.utilities.tiling import (
     tile_image,
     tile_annotations,
 )
