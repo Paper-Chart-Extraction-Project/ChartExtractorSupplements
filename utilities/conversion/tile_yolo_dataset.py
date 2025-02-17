@@ -1,7 +1,7 @@
 """Tiles a yolo dataset."""
 
 # Built-in Imports
-import argparse
+from argparse import ArgumentParser
 from glob import glob
 from pathlib import Path
 from PIL import Image
@@ -20,6 +20,57 @@ from ChartExtractor.utilities.tiling import (
 # External Imports
 import numpy as np
 
+
+parser: ArgumentParser = ArgumentParser()
+parser.add_argument(
+    "input_dataset_path",
+    help="The filepath to the input YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "output_dataset_path",
+    help="The filepath to the output tiled YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "--horizontal_overlap_ratio",
+    help="The amount of overlap the tiles will have left and right.",
+    type=float,
+)
+parser.add_argument(
+    "--vertical_overlap_ratio",
+    help="The amount of overlap the tiles will have up and down.",
+    type=float,
+)
+
+
+def read_input_dataset_path(parser: ArgumentParser):
+    """Reads and validates the input_dataset_path argument.
+
+    Args:
+        parser (ArgumentParser):
+            The ArgumentParser object that contains the command line arguments.
+
+    Raises:
+        FileNotFoundError:
+            If the input dataset does not exist.
+
+    Returns:
+        A path to the input dataset.
+    """
+    input_path: Path = Path(parser.input_dataset_path)
+    if not input_path.exists():
+        raise FileNotFoundError(
+            f"FileNotFoundError: No such file or directory at {str(input_path.resolve())}."
+        )
+    elif not Path(parser.input_dataset_path).is_dir():
+        raise Exception(
+            f"Path exists but is not a directory: {str(input_path.resolve())}."
+        )
+    return input_path.resolve()
+
+
+input_dataset_path: Path = read_input_dataset_path(parser)
 
 images: Dict[str, Image.Image] = {
     Path(im_name).name: Image.open(im_name)
