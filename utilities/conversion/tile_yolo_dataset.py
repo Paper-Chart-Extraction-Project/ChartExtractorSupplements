@@ -3,6 +3,7 @@
 # Built-in Imports
 from argparse import ArgumentParser
 from glob import glob
+import os
 from pathlib import Path
 from PIL import Image
 import re
@@ -90,13 +91,23 @@ def validate_yolo_dataset(input_dataset_path: Path):
         )
     if not labels_path.exists() or not labels_path.is_dir():
         raise Exception(
-            f"Path to labels does not exist, or is not a directory: {str(labels_path)}"
+            f"Path to labels does not exist, or is not a directory: {str(labels_path)}."
         )
-    splits = next(os.walk(labels_path))[1]
-    print(splits)
+
+    splits: List[str] = next(os.walk(labels_path))[1]
+    for split in splits:
+        if not (labels_path / split).is_dir():
+            continue
+        if not (images_path / split).exists():
+            raise Exception(f"Split {split} does not exist in the images folder.")
+        for label_name in glob(str(labels_path / split / "*.txt")):
+            image_for_label: Path = (images_path / split / label_name).resolve()
+            if not image_for_label.exists():
+                raise Exception(f"No image for label {image_for_label}.")
 
 
 input_dataset_path: Path = read_input_dataset_path(parser)
+validate_yolo_dataset(input_dataset_path)
 
 images: Dict[str, Image.Image] = {
     Path(im_name).name: Image.open(im_name)
