@@ -8,8 +8,7 @@ from pathlib import Path
 from PIL import Image
 import re
 import shutil
-from tqdm import tqdm
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Internal Imports
 from ChartExtractor.utilities.annotations import BoundingBox, Keypoint
@@ -20,6 +19,7 @@ from ChartExtractor.utilities.tiling import (
 
 # External Imports
 import numpy as np
+from tqdm import tqdm
 
 
 parser: ArgumentParser = ArgumentParser()
@@ -153,12 +153,84 @@ def create_output_dataset_directories(
             os.mkdir(str(output_dataset_path / "labels" / split))
 
 
+def tile_images(
+    input_dataset_path: Path,
+    output_dataset_path: Path,
+    splits: List[str],
+    tile_size: int,
+    horizontal_overlap_ratio: float = 0.5,
+    vertical_overlap_ratio: float = 0.5,
+):
+    """Tiles images and saves them to the new dataset.
+
+    Args:
+        input_data_path (Path):
+            The path to the YOLO dataset to tile.
+        output_dataset_path (Path):
+            The path to the output dataset.
+        splits (List[str]):
+            A list of the names of the splits that the dataset uses.
+        tile_size (int):
+            The size of the tile to use.
+        horizontal_overlap_ratio (float):
+            The proportion of overlap that two neighboring tiles should have left and right.
+        vertical_overlap_ratio (float):
+            The proportion of overlap that two neighboring tiles should have up and down.
+    """
+
+    def try_open_image(im_path: str) -> Optional[Image]:
+        """Trys to open an image, returns None if it cannot. Treat like a Rust result.
+
+        Args:
+            im_path (str):
+                A path to a file. Possibly an image, but could be anything.
+
+        Returns:
+            An optional of a PIL Image.
+        """
+        try:
+            return Image.open(im_path)
+        except:
+            return None
+
+    for split in splits:
+        image_paths: List[str] = glob(str(input_dataset_path / split / "*"))
+        for im_path in image_paths:
+            image: Optional[Image] = try_open_image(im_path)
+            if image is None:
+                continue
+            image_tiles: List[List[Image]] = tile_image(
+                image,
+                tile_size,
+                tile_size,
+                horizontal_overlap_ratio,
+                vertical_overlap_ratio,
+            )
+            for row_ix, row in enumerate(image_tiles):
+                for col_ix, tile in enumerate(row):
+                    tile.save(
+                        output_dataset_path
+                        / "images"
+                        / split
+                        / f"{row_ix}_{col_ix}_{Path(im_path).stem}.jpg"
+                    )
+
+
+horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
+vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
 input_dataset_path: Path = read_input_dataset_path(parser)
 splits: List[str] = find_splits(input_dataset_path)
 output_dataset_path: Path = Path(parser.output_dataset_path)
 validate_yolo_dataset(input_dataset_path)
 create_output_dataset_directories(output_dataset_path, splits)
-
+tile_images(
+    input_dataset_path,
+    output_dataset_path,
+    splits,
+    tile_size,
+    horizontal_overlap_ratio,
+    vertical_overlap_ratio,
+)
 
 WIDTH, HEIGHT = images[list(images.keys())[0]].size
 ID_TO_CATEGORY: Dict[int, str] = {0: "systolic", 1: "diastolic", 2: "heart rate"}
