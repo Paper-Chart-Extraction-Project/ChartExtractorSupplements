@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 import re
 import shutil
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 # Internal Imports
 from ChartExtractor.utilities.annotations import BoundingBox, Keypoint
@@ -281,6 +281,49 @@ def tile_images(
                         / split
                         / f"{row_ix}_{col_ix}_{Path(im_path).stem}.jpg"
                     )
+
+
+def tile_annotations(
+    input_dataset_path: Path,
+    output_dataset_path: Path,
+    splits: List[str],
+    tile_size: int,
+    horizontal_overlap_ratio: float = 0.5,
+    vertical_overlap_ratio: float = 0.5,
+):
+    """Tiles annotations and saves them to the new dataset.
+
+    Args:
+        input_data_path (Path):
+            The path to the YOLO dataset to tile.
+        output_dataset_path (Path):
+            The path to the output dataset.
+        splits (List[str]):
+            A list of the names of the splits that the dataset uses.
+        tile_size (int):
+            The size of the tile to use.
+        horizontal_overlap_ratio (float):
+            The proportion of overlap that two neighboring tiles should have left and right.
+        vertical_overlap_ratio (float):
+            The proportion of overlap that two neighboring tiles should have up and down.
+    """
+
+    def try_open_annotation(
+        ann_path: str,
+    ) -> Optional[List[Union[BoundingBox, Keypoint]]]:
+        """Trys to open an image, returns None if it cannot. Treat like a Rust result.
+
+        Args:
+            im_path (str):
+                A path to a file. Possibly an image, but could be anything.
+
+        Returns:
+            An optional of a PIL Image.
+        """
+        try:
+        except:
+    
+
 
 
 horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
