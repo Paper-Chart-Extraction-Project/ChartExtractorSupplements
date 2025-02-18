@@ -71,6 +71,23 @@ def read_input_dataset_path(parser: ArgumentParser) -> Path:
     return input_path.resolve()
 
 
+def find_splits(input_dataset_path: Path) -> List[str]:
+    """Finds the splits that the dataset uses.
+
+    Args:
+        input_dataaset_path (Path):
+            The path to the YOLO dataset.
+
+    Returns:
+        A list of the splits that the dataset uses.
+    """
+    potential_splits: List[str] = next(os.walk(str(input_dataset_path / "labels")))
+    splits: List[str] = filter(
+        lambda s: Path(input_dataset_path / "labels" / s).is_dir(), potential_splits
+    )
+    return list(splits)
+
+
 def validate_yolo_dataset(input_dataset_path: Path):
     """Ensures that the yolo dataset is setup correctly.
 
@@ -94,7 +111,7 @@ def validate_yolo_dataset(input_dataset_path: Path):
             f"Path to labels does not exist, or is not a directory: {str(labels_path)}."
         )
 
-    splits: List[str] = next(os.walk(labels_path))[1]
+    splits: List[str] = find_splits(input_dataset_path)
     for split in splits:
         if not (labels_path / split).is_dir():
             continue
@@ -108,15 +125,15 @@ def validate_yolo_dataset(input_dataset_path: Path):
 
 def create_output_dataset_directories(
     output_dataset_path: Path,
-    input_dataset_path: Path,
+    splits: List[str],
 ):
     """Generates the folder structure for the output dataset if it doesn't already exist.
 
     Args:
         output_dataset_path (Path):
             The path to the output dataset.
-        input_dataaset_path (Path):
-            The path to the existing yolo dataset. Used to get the proper splits.
+        splits (List[str]):
+            The list of splits in the dataset.
 
     Raises:
         Any exception related to folder creation. Typically related to
@@ -129,7 +146,6 @@ def create_output_dataset_directories(
     if not (output_dataset_path / "labels").exists():
         os.mkdir(str(output_dataset_path / "labels"))
 
-    splits: List[str] = next(os.walk(input_dataset_path / "labels"))[1]
     for split in splits:
         if not (output_dataset_path / "images" / split).exists():
             os.mkdir(str(output_dataset_path / "images" / split))
@@ -138,9 +154,10 @@ def create_output_dataset_directories(
 
 
 input_dataset_path: Path = read_input_dataset_path(parser)
-output_dataset_path: Path = parser.output_dataset_path
+splits: List[str] = find_splits(input_dataset_path)
+output_dataset_path: Path = Path(parser.output_dataset_path)
 validate_yolo_dataset(input_dataset_path)
-create_output_dataset_directories(output_dataset_path, input_dataset_path)
+create_output_dataset_directories(output_dataset_path, splits)
 
 
 WIDTH, HEIGHT = images[list(images.keys())[0]].size
