@@ -43,6 +43,73 @@ parser.add_argument(
     help="The amount of overlap the tiles will have up and down.",
     type=float,
 )
+tile_size_help_msg: str = (
+    "The size of each tile relative to the size of the full image."
+)
+tile_size_help_msg += (
+    "\nIs based off the size of either the width or the height, whichever"
+)
+tile_size_help_msg += "is smaller."
+parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
+
+
+def read_horizontal_overlap_ratio(parser: ArgumentParser) -> float:
+    """Reads the 'horizontal_overlap_ratio' parameter.
+
+    Args:
+        parser (ArgumentParser):
+            The ArgumentParser object that contains the command line arguments.
+
+    Returns:
+        A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
+        left and right.
+    """
+    if not parser.horizontal_overlap_ratio:
+        return 0.5
+    if 0 < parser.horizontal_overlap_ratio > 1:
+        err_message: str = f"{parser.horizontal_overlap_ratio} is an invalid value for"
+        err_message += "--horizontal_overlap_ratio. Must be between 0 and 1."
+        raise ValueError(err_message)
+    return parser.horizontal_overlap_ratio
+
+
+def read_vertical_overlap_ratio(parser: ArgumentParser) -> float:
+    """Reads the 'vertical_overlap_ratio' parameter.
+
+    Args:
+        parser (ArgumentParser):
+            The ArgumentParser object that contains the command line arguments.
+
+    Returns:
+        A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
+        up and down.
+    """
+    if not parser.vertical_overlap_ratio:
+        return 0.5
+    if 0 < parser.vertical_overlap_ratio > 1:
+        err_message: str = f"{parser.vertical_overlap_ratio} is an invalid value for"
+        err_message += "--vertical_overlap_ratio. Must be between 0 and 1."
+        raise ValueError(err_message)
+    return parser.vertical_overlap_ratio
+
+
+def read_tile_size_ratio(parser: ArgumentParser) -> float:
+    """Reads the 'tile_size_ratio' parameter.
+
+    Args:
+        parser (ArgumentParser):
+            The ArgumentParser object that contains the command line arguments.
+
+    Returns:
+        A float between 0 and 1 indicating the size of a tile relative to the full image.
+    """
+    if not parser.tile_size_ratio:
+        return 0.5
+    if 0 < parser.tile_size_ratio > 1:
+        err_message: str = f"{parser.tile_size_ratio} is an invalid value for"
+        err_message += "--tile_size_ratio. Must be between 0 and 1."
+        raise ValueError(err_message)
+    return parser.tile_size_ratio
 
 
 def read_input_dataset_path(parser: ArgumentParser) -> Path:
@@ -218,6 +285,7 @@ def tile_images(
 
 horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
 vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
+tile_size_ratio: float = read_tile_size_ratio(parser)
 input_dataset_path: Path = read_input_dataset_path(parser)
 splits: List[str] = find_splits(input_dataset_path)
 output_dataset_path: Path = Path(parser.output_dataset_path)
@@ -227,7 +295,7 @@ tile_images(
     input_dataset_path,
     output_dataset_path,
     splits,
-    tile_size,
+    tile_size_ratio,
     horizontal_overlap_ratio,
     vertical_overlap_ratio,
 )
