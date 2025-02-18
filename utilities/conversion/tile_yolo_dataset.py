@@ -45,7 +45,7 @@ parser.add_argument(
 )
 
 
-def read_input_dataset_path(parser: ArgumentParser):
+def read_input_dataset_path(parser: ArgumentParser) -> Path:
     """Reads and validates the input_dataset_path argument.
 
     Args:
@@ -106,14 +106,42 @@ def validate_yolo_dataset(input_dataset_path: Path):
                 raise Exception(f"No image for label {image_for_label}.")
 
 
-input_dataset_path: Path = read_input_dataset_path(parser)
-validate_yolo_dataset(input_dataset_path)
+def create_output_dataset_directories(
+    output_dataset_path: Path,
+    input_dataset_path: Path,
+):
+    """Generates the folder structure for the output dataset if it doesn't already exist.
 
-images: Dict[str, Image.Image] = {
-    Path(im_name).name: Image.open(im_name)
-    for im_name in glob(str(path_to_data / "chart_images") + "/*_intraoperative.JPG")
-    + glob(str(path_to_data / "chart_images") + "/RC_IO_*.JPG")
-}
+    Args:
+        output_dataset_path (Path):
+            The path to the output dataset.
+        input_dataaset_path (Path):
+            The path to the existing yolo dataset. Used to get the proper splits.
+
+    Raises:
+        Any exception related to folder creation. Typically related to
+        filesystem permissions.
+    """
+    if not output_dataset_path.exists():
+        os.mkdir(str(output_dataset_path.resolve()))
+    if not (output_dataset_path / "images").exists():
+        os.mkdir(str(output_dataset_path / "images"))
+    if not (output_dataset_path / "labels").exists():
+        os.mkdir(str(output_dataset_path / "labels"))
+
+    splits: List[str] = next(os.walk(input_dataset_path / "labels"))[1]
+    for split in splits:
+        if not (output_dataset_path / "images" / split).exists():
+            os.mkdir(str(output_dataset_path / "images" / split))
+        if not (output_dataset_path / "labels" / split).exists():
+            os.mkdir(str(output_dataset_path / "labels" / split))
+
+
+input_dataset_path: Path = read_input_dataset_path(parser)
+output_dataset_path: Path = parser.output_dataset_path
+validate_yolo_dataset(input_dataset_path)
+create_output_dataset_directories(output_dataset_path, input_dataset_path)
+
 
 WIDTH, HEIGHT = images[list(images.keys())[0]].size
 ID_TO_CATEGORY: Dict[int, str] = {0: "systolic", 1: "diastolic", 2: "heart rate"}
