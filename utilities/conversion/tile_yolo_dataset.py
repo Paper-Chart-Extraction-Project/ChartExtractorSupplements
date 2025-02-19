@@ -372,6 +372,34 @@ def tile_annotations(
         except:
             return None
     
+    for split in splits:
+        label_paths: List[str] = glob(input_dataset_path/split/"*")
+        for lab_path in label_paths:
+            annotations: List[Union[BoundingBox, Keypoint]] = try_open_annotation(lab_path)
+            if annotations is None:
+                continue
+            annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = tile_annotations(
+                annotations,
+                image_size_dict[Path(lab_path.stem)][0],
+                image_size_dict[Path(lab_path.stem)][1],
+                tile_size,
+                tile_size,
+                horizontal_overlap_ratio,
+                vertical_overlap_ratio,
+            )
+            for row in annotation_tiles:
+                for tile in row:
+                    data_to_save: str = "\n".join(
+                        [
+                            ann.category
+                            + l.to_yolo(slice_size, slice_size, IdMirror(), 10, True)[1:]
+                            for l in tile
+                        ]
+                    )
+                    if yolo_str != "":
+                        with open(str(output_dataset_path/split/Path(lab_path).stem) + ".txt", "w") as f:
+                            f.write(data_to_save)
+
 
 horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
 vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
@@ -389,30 +417,6 @@ tile_images(
     horizontal_overlap_ratio,
     vertical_overlap_ratio,
 )
-
-WIDTH, HEIGHT = images[list(images.keys())[0]].size
-ID_TO_CATEGORY: Dict[int, str] = {0: "systolic", 1: "diastolic", 2: "heart rate"}
-CATEGORY_TO_ID: Dict[str, str] = {v: k for (k, v) in ID_TO_CATEGORY.items()}
-CATEGORY_TO_ID = {"systolic": 0, "diastolic": 1, "heart rate": 2}
-
-labels: Dict[str, List[Keypoint]] = {
-    Path(lab_name).name: [
-        Keypoint.from_yolo(
-            line.strip(),
-            images[f"{Path(lab_name).stem}.JPG"].size[0],
-            images[f"{Path(lab_name).stem}.JPG"].size[1],
-            ID_TO_CATEGORY,
-        )
-        for line in open(lab_name, "r").readlines()
-    ]
-    for lab_name in glob(str(path_to_data / "bp_yolo_keypoint_labels") + "/*.txt")
-}
-
-HORZ_OVERLAP_RATIO, VERT_OVERLAP_RATIO = 0.5, 0.5
-
-tile_ann_dict: Dict[str, Tuple[Image.Image, List[List[Keypoint]]]] = dict()
-IMG_DEST: Path = path_to_data / "tiled_bp_yolo_images"
-LAB_DEST: Dict[str, Path] = path_to_data / "tiled_bp_yolo_keypoints"
 
 for key in tqdm(images.keys()):
     image: Image.Image = images[key]
@@ -461,71 +465,6 @@ for key in tqdm(images.keys()):
                     "w",
                 ) as f:
                     f.write(yolo_str)
-
-
-def get_chart_name_from_path(path: str) -> str:
-    try:
-        return re.findall(r"RC_[0-9][0-9][0-9][0-9]", path)[0]
-    except:
-        return re.findall(r"RC_IO_[0-9][0-9][0-9][0-9]", path)[0]
-
-
-val_sheets = [
-    "RC_0029",
-    "RC_0030",
-    "RC_0031",
-    "RC_0032",
-    "RC_0033",
-]
-
-test_sheets = [
-    "RC_0034",
-    "RC_0035",
-    "RC_0036",
-    "RC_0037",
-    "RC_0038",
-    "RC_0039",
-    "RC_0043",
-    "RC_0044",
-    "RC_0045",
-]
-
-unlabeled_sheets = []
-
-new_dest_stem = (
-    path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "images"
-)
-for im_path in tqdm(glob(str(IMG_DEST / "*.JPG"))):
-    if get_chart_name_from_path(im_path) in unlabeled_sheets:
-        continue
-    if get_chart_name_from_path(im_path) in test_sheets:
-        dest_branch = "test"
-    elif get_chart_name_from_path(im_path) in val_sheets:
-        dest_branch = "val"
-    else:
-        dest_branch = "train"
-    new_dest = new_dest_stem / dest_branch
-
-    shutil.copy(im_path, new_dest)
-
-new_dest_stem = (
-    path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "labels"
-)
-for lab_path in tqdm(glob(str(LAB_DEST / "*.txt"))):
-    if get_chart_name_from_path(lab_path) in unlabeled_sheets:
-        continue
-
-    if get_chart_name_from_path(lab_path) in unlabeled_sheets:
-        continue
-    if get_chart_name_from_path(lab_path) in test_sheets:
-        dest_branch = "test"
-    elif get_chart_name_from_path(lab_path) in val_sheets:
-        dest_branch = "val"
-    else:
-        dest_branch = "train"
-    new_dest = new_dest_stem / dest_branch
-
-    shutil.copy(lab_path, new_dest)
 
 
 def undersample_background(labels_path: Path, images_path: Path, target_pcnt: float):
