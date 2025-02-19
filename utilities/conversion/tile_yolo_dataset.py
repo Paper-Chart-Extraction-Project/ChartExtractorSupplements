@@ -220,6 +220,22 @@ def create_output_dataset_directories(
             os.mkdir(str(output_dataset_path / "labels" / split))
 
 
+def try_open_image(im_path: str) -> Optional[Image]:
+    """Trys to open an image, returns None if it cannot. Treat like a Rust result.
+
+    Args:
+        im_path (str):
+            A path to a file. Possibly an image, but could be anything.
+
+    Returns:
+        An optional of a PIL Image.
+    """
+    try:
+        return Image.open(im_path)
+    except:
+        return None
+
+
 def tile_images(
     input_dataset_path: Path,
     output_dataset_path: Path,
@@ -244,22 +260,6 @@ def tile_images(
         vertical_overlap_ratio (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
-
-    def try_open_image(im_path: str) -> Optional[Image]:
-        """Trys to open an image, returns None if it cannot. Treat like a Rust result.
-
-        Args:
-            im_path (str):
-                A path to a file. Possibly an image, but could be anything.
-
-        Returns:
-            An optional of a PIL Image.
-        """
-        try:
-            return Image.open(im_path)
-        except:
-            return None
-
     for split in splits:
         image_paths: List[str] = glob(str(input_dataset_path / split / "*"))
         for im_path in image_paths:
@@ -307,6 +307,38 @@ def tile_annotations(
         vertical_overlap_ratio (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
+    class IdMirror:
+        """A bad hack for ID_TO_CATEGORY.
+        
+        When reading an annotation from YOLO, the integer ID needs to be mapped to a string
+        encoding the actual class. Here, we are going straight from label to label, so while
+        we could pass in a dictionary that just has the identity mapping for a large number
+        of integers (ex: {1:1, 2:2, ..., 1,000,000:1,000,000}), this does the same with minimal
+        memory consumption.
+        """
+        #todo: add pyyaml and avoid this...
+        def __init__(self):
+            pass
+        
+        def __getitem__(self, key: int) -> int:
+            return key
+
+    def create_image_size_dict() -> Dict[str, Tuple[int, int]]:
+        """Creates a dict with image filename stems mapped to image size (width, height).
+
+        Returns:
+            A dictionary mapping filename stems to a tuple with an image's (width, height).
+        """
+        image_size_dict: Dict[str, Tuple[int, int]] = dict()
+        for split in splits:
+            for file in glob(input_dataset_path/split/"*"):
+                image: Optional[Image] = try_open_image(file)
+                if image is None:
+                    continue
+                image_size_dict[Path(file).stem] = image.size
+        return image_size_dict
+        
+    image_size_dict: Dict[str, Tuple[int, int]] = create_image_size_dict()
 
     def try_open_annotation(
         ann_path: str,
@@ -321,10 +353,25 @@ def tile_annotations(
             An optional of a PIL Image.
         """
         try:
+            text: List[str] = open(ann_path, "r").readlines()
+            if text[0].replace("\n", "").split(" ") > 5:
+                annotation_type = Keypoint
+            else:
+                annotation_type = BoundingBox
+            annotations: List[Union[BoundingBox, Keypoint]] = list()
+            for line in text:
+                annotations.append(
+                    annotation_type.from_yolo(
+                        line.strip(),
+                        image_size_dict[ann_path.stem][0],
+                        image_size_dict[ann_path.stem][1],
+                        IdMirror()
+                    )
+                )
+            return annotations
         except:
+            return None
     
-
-
 
 horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
 vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
