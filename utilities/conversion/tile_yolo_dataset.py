@@ -4,6 +4,7 @@
 from argparse import ArgumentParser, Namespace
 from glob import glob
 import os
+from operator import attrgetter
 from pathlib import Path
 from PIL import Image
 import re
@@ -34,80 +35,25 @@ parser.add_argument(
     type=str,
 )
 parser.add_argument(
-    "--horizontal_overlap_ratio",
-    help="The percent amount of overlap the tiles will have left and right.",
+    "--background_proportion",
+    help="Proportion of background images in the final dataset (Default: 0.15)",
     type=float,
 )
 parser.add_argument(
-    "--vertical_overlap_ratio",
-    help="The percent amount of overlap the tiles will have up and down.",
+    "--horizontal_overlap_proportion",
+    help="The percent amount of horizontal overlap for tiles (Default: 0.5)",
     type=float,
 )
-tile_size_help_msg: str = (
-    "The size of each tile relative to the size of the full image."
+parser.add_argument(
+    "--vertical_overlap_proportion",
+    help="The percent amount vertical overlap for tiles (Default: 0.5)",
+    type=float,
 )
-tile_size_help_msg += "\nThe final value is based off the size of either the width or the height, whichever"
-tile_size_help_msg += " is smaller."
-parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
-
-
-def read_horizontal_overlap_ratio(args: Namespace) -> float:
-    """Reads the 'horizontal_overlap_ratio' parameter.
-
-    Args:
-        args (Namespace):
-            The argparse.Namespace object that contains the command line arg data.
-
-    Returns:
-        A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
-        left and right.
-    """
-    if not args.horizontal_overlap_ratio:
-        return 0.5
-    if 0 < args.horizontal_overlap_ratio > 1:
-        err_message: str = f"{args.horizontal_overlap_ratio} is an invalid value for"
-        err_message += "--horizontal_overlap_ratio. Must be between 0 and 1."
-        raise ValueError(err_message)
-    return args.horizontal_overlap_ratio
-
-
-def read_vertical_overlap_ratio(args: Namespace) -> float:
-    """Reads the 'vertical_overlap_ratio' parameter.
-
-    Args:
-        args (Namespace):
-            The argparse.Namespace object that contains the command line arg data.
-
-    Returns:
-        A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
-        up and down.
-    """
-    if not args.vertical_overlap_ratio:
-        return 0.5
-    if 0 < args.vertical_overlap_ratio > 1:
-        err_message: str = f"{args.vertical_overlap_ratio} is an invalid value for"
-        err_message += "--vertical_overlap_ratio. Must be between 0 and 1."
-        raise ValueError(err_message)
-    return args.vertical_overlap_ratio
-
-
-def read_tile_size_ratio(args: Namespace) -> float:
-    """Reads the 'tile_size_ratio' parameter.
-
-    Args:
-        args (Namespace):
-            The argparse.Namespace object that contains the command line arg data.
-
-    Returns:
-        A float between 0 and 1 indicating the size of a tile relative to the full image.
-    """
-    if not args.tile_size_ratio:
-        return 0.5
-    if 0 < args.tile_size_ratio > 1:
-        err_message: str = f"{args.tile_size_ratio} is an invalid value for"
-        err_message += "--tile_size_ratio. Must be between 0 and 1."
-        raise ValueError(err_message)
-    return args.tile_size_ratio
+parser.add_argument(
+    "--tile_size_proportion",
+    help="The percent of the image's height or width (whichever is smaller) to make each tile (Default: 0.2)",
+    type=float,
+)
 
 
 def read_input_dataset_path(args: Namespace) -> Path:
@@ -134,6 +80,35 @@ def read_input_dataset_path(args: Namespace) -> Path:
             f"Path exists but is not a directory: {str(input_path.resolve())}."
         )
     return input_path.resolve()
+
+
+def read_float_in_range_0_to_1(args: Namespace, argname: str, default: float) -> float:
+    """Reads a float from the command line arguments that must be within the range [0, 1].
+
+    Args:
+        args (Namespace):
+            The argparse.Namespace object that contains the command line arg data.
+        argname (str):
+            The name of the argument to get from the command line args.
+        default (float):
+            The default value to use if the user did not pass in a value.
+
+    Raises:
+        ValueError:
+            If the supplied value is out of the range [0, 1].
+
+    Returns:
+        A float between 0 and 1 encoding the value passed in, or a default.
+    """
+    if not attrgetter(argname)(args):
+        return default
+    float_val: float = attrgetter(argname)(args)
+    float_is_in_range: bool = 0 <= float_val <= 1
+    if not float_is_in_range:
+        err_message: str = f"{float_val} is an invalid value for --{argname}."
+        err_message += " Value must be between 0 and 1."
+        raise ValueError(err_message)
+    return float_val
 
 
 def find_splits(input_dataset_path: Path) -> List[str]:
@@ -239,8 +214,8 @@ def tile_images(
     output_dataset_path: Path,
     splits: List[str],
     tile_size: int,
-    horizontal_overlap_ratio: float = 0.5,
-    vertical_overlap_ratio: float = 0.5,
+    horizontal_overlap_proportion: float = 0.5,
+    vertical_overlap_proportion: float = 0.5,
 ):
     """Tiles images and saves them to the new dataset.
 
@@ -253,9 +228,9 @@ def tile_images(
             A list of the names of the splits that the dataset uses.
         tile_size (int):
             The size of the tile to use.
-        horizontal_overlap_ratio (float):
+        horizontal_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have left and right.
-        vertical_overlap_ratio (float):
+        vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
     for split in splits:
@@ -268,8 +243,8 @@ def tile_images(
                 image,
                 tile_size,
                 tile_size,
-                horizontal_overlap_ratio,
-                vertical_overlap_ratio,
+                horizontal_overlap_proportion,
+                vertical_overlap_proportion,
             )
             for row_ix, row in enumerate(image_tiles):
                 for col_ix, tile in enumerate(row):
@@ -286,8 +261,8 @@ def tile_annotations(
     output_dataset_path: Path,
     splits: List[str],
     tile_size: int,
-    horizontal_overlap_ratio: float = 0.5,
-    vertical_overlap_ratio: float = 0.5,
+    horizontal_overlap_proportion: float = 0.5,
+    vertical_overlap_proportion: float = 0.5,
 ):
     """Tiles annotations and saves them to the new dataset.
 
@@ -300,9 +275,9 @@ def tile_annotations(
             A list of the names of the splits that the dataset uses.
         tile_size (int):
             The size of the tile to use.
-        horizontal_overlap_ratio (float):
+        horizontal_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have left and right.
-        vertical_overlap_ratio (float):
+        vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
 
@@ -387,8 +362,8 @@ def tile_annotations(
                     image_size_dict[Path(lab_path.stem)][1],
                     tile_size,
                     tile_size,
-                    horizontal_overlap_ratio,
-                    vertical_overlap_ratio,
+                    horizontal_overlap_proportion,
+                    vertical_overlap_proportion,
                 )
             )
             for row in annotation_tiles:
@@ -411,15 +386,17 @@ def tile_annotations(
                             f.write(data_to_save)
 
 
-def undersample_background(labels_path: Path, images_path: Path, target_pcnt: float):
+def undersample_background(
+    output_dataset_path: Path, splits: List[str], target_pcnt: float
+):
     """Randomly deletes images with no instances of blood pressure in them to undersample the background.
 
     Args:
-        `labels_path` (Path):
-            A pathlib Path to the training set labels.
-        `images_path` (Path):
-            A pathlib Path to the training set images.
-        `target_pcnt` (float):
+        output_dataset_path (Path):
+            A pathlib Path to the final dataset.
+        splits (List[str]):
+            A list of the splits the dataset uses.
+        target_pcnt (float):
             A number between 0 and 1 determining the target percentage of backgrounds.
     """
     if not 0 <= target_pcnt <= 1:
@@ -450,9 +427,18 @@ def undersample_background(labels_path: Path, images_path: Path, target_pcnt: fl
 
 if __name__ == "__main__":
     args: Namespace = parser.parse_args()
-    horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
-    vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
-    tile_size_ratio: float = read_tile_size_ratio(parser)
+    horizontal_overlap_proportion: float = read_float_in_range_0_to_1(
+        args, "horizontal_overlap_proportion", 0.5
+    )
+    vertical_overlap_proportion: float = read_float_in_range_0_to_1(
+        args, "vertical_overlap_proportion", 0.5
+    )
+    tile_size_proportion: float = read_float_in_range_0_to_1(
+        args, "tile_size_proportion", 0.2
+    )
+    background_proportion: float = read_float_in_range_0_to_1(
+        args, "background_proportion", 0.15
+    )
     input_dataset_path: Path = read_input_dataset_path(parser)
     splits: List[str] = find_splits(input_dataset_path)
     output_dataset_path: Path = Path(parser.output_dataset_path)
@@ -462,17 +448,17 @@ if __name__ == "__main__":
         input_dataset_path,
         output_dataset_path,
         splits,
-        tile_size_ratio,
-        horizontal_overlap_ratio,
-        vertical_overlap_ratio,
+        tile_size_proportion,
+        horizontal_overlap_proportion,
+        vertical_overlap_proportion,
     )
     tile_annotations(
         input_dataset_path,
         output_dataset_path,
         splits,
-        tile_size_ratio,
-        horizontal_overlap_ratio,
-        vertical_overlap_ratio,
+        tile_size_proportion,
+        horizontal_overlap_proportion,
+        vertical_overlap_proportion,
     )
     undersample_background(
         path_to_data
