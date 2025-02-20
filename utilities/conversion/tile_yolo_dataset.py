@@ -256,7 +256,6 @@ def tile_images(
                 horizontal_overlap_proportion,
                 vertical_overlap_proportion,
             )
-            print(image_tiles)
             for row_ix, row in enumerate(image_tiles):
                 for col_ix, tile in enumerate(row):
                     tile.save(
@@ -271,7 +270,7 @@ def tile_annotations(
     input_dataset_path: Path,
     output_dataset_path: Path,
     splits: List[str],
-    tile_size: int,
+    tile_size_proportion: float,
     horizontal_overlap_proportion: float = 0.5,
     vertical_overlap_proportion: float = 0.5,
 ):
@@ -284,8 +283,9 @@ def tile_annotations(
             The path to the output dataset.
         splits (List[str]):
             A list of the names of the splits that the dataset uses.
-        tile_size (int):
-            The size of the tile to use.
+        tile_size_proportion (float):
+            The percent of the image's height or width (whichever is smaller) to use
+            for tiling each annotation.
         horizontal_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have left and right.
         vertical_overlap_proportion (float):
@@ -348,11 +348,13 @@ def tile_annotations(
             )
             if annotations is None:
                 continue
+            width, height = image_size_dict[path(lab_path.stem)]
+            tile_size: int = min(width*tile_size_proportion, height*tile_size_proportion)
             annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = (
                 tile_annotations(
                     annotations,
-                    image_size_dict[Path(lab_path.stem)][0],
-                    image_size_dict[Path(lab_path.stem)][1],
+                    width,
+                    height,
                     tile_size,
                     tile_size,
                     horizontal_overlap_proportion,
