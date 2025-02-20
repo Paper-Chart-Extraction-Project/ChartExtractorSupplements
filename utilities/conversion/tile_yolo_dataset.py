@@ -54,6 +54,11 @@ parser.add_argument(
     help="The percent of the image's height or width (whichever is smaller) to make each tile (Default: 0.2)",
     type=float,
 )
+parser.add_argument(
+    "--random_seed",
+    help="The random seed to use for numpy.",
+    type=int,
+)
 
 
 def read_input_dataset_path(args: Namespace) -> Path:
@@ -399,34 +404,48 @@ def undersample_background(
         target_pcnt (float):
             A number between 0 and 1 determining the target percentage of backgrounds.
     """
-    if not 0 <= target_pcnt <= 1:
-        raise ValueError("Target percent must be between 0 and 1 (inclusive).")
-
     labels: List[str] = [Path(s) for s in glob(str(labels_path / "*.txt"))]
     images: List[str] = [Path(s) for s in glob(str(images_path / "*.JPG"))]
-    backgrounds: List[str] = list(
-        filter(lambda ti: ti.stem not in [tl.stem for tl in labels], images)
-    )
-    total_size_of_target_dataset: int = np.ceil(len(labels) / (1 - target_pcnt))
-    number_of_backgrounds_to_remove: int = int(
-        len(backgrounds) - np.ceil(total_size_of_target_dataset * target_pcnt)
-    )
-    backgrounds_to_remove: list[int] = sorted(
-        np.random.choice(
-            a=len(backgrounds), size=number_of_backgrounds_to_remove, replace=False
+
+    files_to_delete: List[Path] = list()
+    for split in splits:
+        label_paths: List[Path] = [
+            Path(s) for s in glob(str(output_dataset_path/"labels"/split/"*.txt"))
+        ]
+        image_paths: List[Path] = [
+            Path(s) for s in glob(str(output_dataset_path/"images"/split/"*.jpg"))
+        ]
+        background_paths: List[Path] = list(
+            filter(
+                lambda im_path: im_path.stem not in [lab_path.stem for lab_path in labels], 
+                image_paths
+            )
         )
-    )
-    backgrounds_to_remove: list[Path] = [
-        im_to_remove
-        for (ix, im_to_remove) in enumerate(backgrounds)
-        if ix in backgrounds_to_remove
-    ]
+        total_size_of_target_dataset: int = np.ceil(len(label_paths) / (1 - target_pcnt))
+        number_of_backgrounds_to_remove: int = int(
+            len(background_paths) - np.ceil(total_size_of_target_dataset * target_pcnt)
+        )
+        backgrounds_to_remove: list[int] = sorted(
+            np.random.choice(
+                a=len(backgrounds), size=number_of_backgrounds_to_remove, replace=False
+            )
+        )
+        backgrounds_to_remove: list[Path] = [
+            im_to_remove
+            for (ix, im_to_remove) in enumerate(backgrounds)
+            if ix in backgrounds_to_remove
+        ]
+        files_to_delete += backgrounds_to_remove
     for path in tqdm(backgrounds_to_remove):
-        os.remove(path)
+        os.remove(files_to_delete)
 
 
 if __name__ == "__main__":
     args: Namespace = parser.parse_args()
+
+    if args.random_seed:
+        np.random.seed(args.random_seed)
+
     horizontal_overlap_proportion: float = read_float_in_range_0_to_1(
         args, "horizontal_overlap_proportion", 0.5
     )
@@ -460,29 +479,4 @@ if __name__ == "__main__":
         horizontal_overlap_proportion,
         vertical_overlap_proportion,
     )
-    undersample_background(
-        path_to_data
-        / "yolo_datasets"
-        / "new_bp_and_hr_one_vs_rest_hr"
-        / "labels"
-        / "train",
-        path_to_data
-        / "yolo_datasets"
-        / "new_bp_and_hr_one_vs_rest_hr"
-        / "images"
-        / "train",
-        0.15,
-    )
-    undersample_background(
-        path_to_data
-        / "yolo_datasets"
-        / "new_bp_and_hr_one_vs_rest_hr"
-        / "labels"
-        / "val",
-        path_to_data
-        / "yolo_datasets"
-        / "new_bp_and_hr_one_vs_rest_hr"
-        / "images"
-        / "val",
-        0.15,
-    )
+    undersample_background(output_dataset_path, splits, background_proportion)
