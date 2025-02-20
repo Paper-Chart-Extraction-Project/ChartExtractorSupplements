@@ -46,9 +46,7 @@ parser.add_argument(
 tile_size_help_msg: str = (
     "The size of each tile relative to the size of the full image."
 )
-tile_size_help_msg += (
-    "\nThe final value is based off the size of either the width or the height, whichever"
-)
+tile_size_help_msg += "\nThe final value is based off the size of either the width or the height, whichever"
 tile_size_help_msg += " is smaller."
 parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
 
@@ -307,19 +305,21 @@ def tile_annotations(
         vertical_overlap_ratio (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
+
     class IdMirror:
         """A bad hack for ID_TO_CATEGORY.
-        
+
         When reading an annotation from YOLO, the integer ID needs to be mapped to a string
         encoding the actual class. Here, we are going straight from label to label, so while
         we could pass in a dictionary that just has the identity mapping for a large number
         of integers (ex: {1:1, 2:2, ..., 1,000,000:1,000,000}), this does the same with minimal
         memory consumption.
         """
-        #todo: add pyyaml and avoid this...
+
+        # todo: add pyyaml and avoid this...
         def __init__(self):
             pass
-        
+
         def __getitem__(self, key: int) -> int:
             return key
 
@@ -331,13 +331,13 @@ def tile_annotations(
         """
         image_size_dict: Dict[str, Tuple[int, int]] = dict()
         for split in splits:
-            for file in glob(input_dataset_path/split/"*"):
+            for file in glob(input_dataset_path / split / "*"):
                 image: Optional[Image] = try_open_image(file)
                 if image is None:
                     continue
                 image_size_dict[Path(file).stem] = image.size
         return image_size_dict
-        
+
     image_size_dict: Dict[str, Tuple[int, int]] = create_image_size_dict()
 
     def try_open_annotation(
@@ -365,39 +365,49 @@ def tile_annotations(
                         line.strip(),
                         image_size_dict[ann_path.stem][0],
                         image_size_dict[ann_path.stem][1],
-                        IdMirror()
+                        IdMirror(),
                     )
                 )
             return annotations
         except:
             return None
-    
+
     for split in splits:
-        label_paths: List[str] = glob(input_dataset_path/split/"*")
+        label_paths: List[str] = glob(input_dataset_path / split / "*")
         for lab_path in label_paths:
-            annotations: List[Union[BoundingBox, Keypoint]] = try_open_annotation(lab_path)
+            annotations: List[Union[BoundingBox, Keypoint]] = try_open_annotation(
+                lab_path
+            )
             if annotations is None:
                 continue
-            annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = tile_annotations(
-                annotations,
-                image_size_dict[Path(lab_path.stem)][0],
-                image_size_dict[Path(lab_path.stem)][1],
-                tile_size,
-                tile_size,
-                horizontal_overlap_ratio,
-                vertical_overlap_ratio,
+            annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = (
+                tile_annotations(
+                    annotations,
+                    image_size_dict[Path(lab_path.stem)][0],
+                    image_size_dict[Path(lab_path.stem)][1],
+                    tile_size,
+                    tile_size,
+                    horizontal_overlap_ratio,
+                    vertical_overlap_ratio,
+                )
             )
             for row in annotation_tiles:
                 for tile in row:
                     data_to_save: str = "\n".join(
                         [
                             ann.category
-                            + l.to_yolo(slice_size, slice_size, IdMirror(), 10, True)[1:]
+                            + l.to_yolo(slice_size, slice_size, IdMirror(), 10, True)[
+                                1:
+                            ]
                             for l in tile
                         ]
                     )
                     if yolo_str != "":
-                        with open(str(output_dataset_path/split/Path(lab_path).stem) + ".txt", "w") as f:
+                        with open(
+                            str(output_dataset_path / split / Path(lab_path).stem)
+                            + ".txt",
+                            "w",
+                        ) as f:
                             f.write(data_to_save)
 
 
@@ -478,7 +488,15 @@ if __name__ == "__main__":
         0.15,
     )
     undersample_background(
-        path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "labels" / "val",
-        path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "images" / "val",
+        path_to_data
+        / "yolo_datasets"
+        / "new_bp_and_hr_one_vs_rest_hr"
+        / "labels"
+        / "val",
+        path_to_data
+        / "yolo_datasets"
+        / "new_bp_and_hr_one_vs_rest_hr"
+        / "images"
+        / "val",
         0.15,
     )
