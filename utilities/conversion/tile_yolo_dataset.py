@@ -126,7 +126,7 @@ def find_splits(input_dataset_path: Path) -> List[str]:
     Returns:
         A list of the splits that the dataset uses.
     """
-    potential_splits: List[str] = next(os.walk(str(input_dataset_path / "labels")))
+    potential_splits: List[str] = next(os.walk(str(input_dataset_path / "labels")))[1]
     splits: List[str] = filter(
         lambda s: Path(input_dataset_path / "labels" / s).is_dir(), potential_splits
     )
@@ -198,7 +198,7 @@ def create_output_dataset_directories(
             os.mkdir(str(output_dataset_path / "labels" / split))
 
 
-def try_open_image(im_path: str) -> Optional[Image]:
+def try_open_image(im_path: str) -> Optional[Image.Image]:
     """Trys to open an image, returns None if it cannot. Treat like a Rust result.
 
     Args:
@@ -241,10 +241,10 @@ def tile_images(
     for split in splits:
         image_paths: List[str] = glob(str(input_dataset_path / split / "*"))
         for im_path in image_paths:
-            image: Optional[Image] = try_open_image(im_path)
+            image: Optional[Image.Image] = try_open_image(im_path)
             if image is None:
                 continue
-            image_tiles: List[List[Image]] = tile_image(
+            image_tiles: List[List[Image.Image]] = tile_image(
                 image,
                 tile_size,
                 tile_size,
@@ -293,8 +293,8 @@ def tile_annotations(
         """
         image_size_dict: Dict[str, Tuple[int, int]] = dict()
         for split in splits:
-            for file in glob(input_dataset_path / split / "*"):
-                image: Optional[Image] = try_open_image(file)
+            for file in glob(str(input_dataset_path / split / "*")):
+                image: Optional[Image.Image] = try_open_image(file)
                 if image is None:
                     continue
                 image_size_dict[Path(file).stem] = image.size
@@ -335,7 +335,7 @@ def tile_annotations(
             return None
 
     for split in splits:
-        label_paths: List[str] = glob(input_dataset_path / split / "*")
+        label_paths: List[str] = glob(str(input_dataset_path / split / "*"))
         for lab_path in label_paths:
             annotations: List[Union[BoundingBox, Keypoint]] = try_open_annotation(
                 lab_path
@@ -386,9 +386,6 @@ def undersample_background(
         target_pcnt (float):
             A number between 0 and 1 determining the target percentage of backgrounds.
     """
-    labels: List[str] = [Path(s) for s in glob(str(labels_path / "*.txt"))]
-    images: List[str] = [Path(s) for s in glob(str(images_path / "*.JPG"))]
-
     files_to_delete: List[Path] = list()
     for split in splits:
         label_paths: List[Path] = [
@@ -409,12 +406,12 @@ def undersample_background(
         )
         backgrounds_to_remove: list[int] = sorted(
             np.random.choice(
-                a=len(backgrounds), size=number_of_backgrounds_to_remove, replace=False
+                a=len(background_paths), size=number_of_backgrounds_to_remove, replace=False
             )
         )
         backgrounds_to_remove: list[Path] = [
             im_to_remove
-            for (ix, im_to_remove) in enumerate(backgrounds)
+            for (ix, im_to_remove) in enumerate(background_paths)
             if ix in backgrounds_to_remove
         ]
         files_to_delete += backgrounds_to_remove
@@ -440,9 +437,9 @@ if __name__ == "__main__":
     background_proportion: float = read_float_in_range_0_to_1(
         args, "background_proportion", 0.15
     )
-    input_dataset_path: Path = read_input_dataset_path(parser)
+    input_dataset_path: Path = read_input_dataset_path(args)
     splits: List[str] = find_splits(input_dataset_path)
-    output_dataset_path: Path = Path(parser.output_dataset_path)
+    output_dataset_path: Path = Path(args.output_dataset_path)
     validate_yolo_dataset(input_dataset_path)
     create_output_dataset_directories(output_dataset_path, splits)
     tile_images(
