@@ -218,7 +218,7 @@ def tile_images(
     input_dataset_path: Path,
     output_dataset_path: Path,
     splits: List[str],
-    tile_size: int,
+    tile_size_proportion: float,
     horizontal_overlap_proportion: float = 0.5,
     vertical_overlap_proportion: float = 0.5,
 ):
@@ -231,19 +231,24 @@ def tile_images(
             The path to the output dataset.
         splits (List[str]):
             A list of the names of the splits that the dataset uses.
-        tile_size (int):
-            The size of the tile to use.
+        tile_size_proportion (float):
+            The percent of the image's height or width (whichever is smaller) to make
+            each tile.
         horizontal_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have left and right.
         vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
     for split in splits:
-        image_paths: List[str] = glob(str(input_dataset_path / split / "*"))
+        image_paths: List[str] = glob(str(input_dataset_path / "images" / split / "*"))
         for im_path in image_paths:
             image: Optional[Image.Image] = try_open_image(im_path)
             if image is None:
                 continue
+            tile_size: int = min(
+                image.size[0]*tile_size_proportion,
+                image.size[1]*tile_size_proportion
+            )
             image_tiles: List[List[Image.Image]] = tile_image(
                 image,
                 tile_size,
@@ -251,6 +256,7 @@ def tile_images(
                 horizontal_overlap_proportion,
                 vertical_overlap_proportion,
             )
+            print(image_tiles)
             for row_ix, row in enumerate(image_tiles):
                 for col_ix, tile in enumerate(row):
                     tile.save(
@@ -438,8 +444,17 @@ if __name__ == "__main__":
         args, "background_proportion", 0.15
     )
     input_dataset_path: Path = read_input_dataset_path(args)
-    splits: List[str] = find_splits(input_dataset_path)
     output_dataset_path: Path = Path(args.output_dataset_path)
+    print()
+    print("Starting tiled dataset creation.")
+    print(f"Input Dataset: {str(input_dataset_path.resolve())}")
+    print(f"Output Path: {str(output_dataset_path.resolve())}")
+    print(f"Horizontal Overlap Proportion: {horizontal_overlap_proportion}")
+    print(f"Vertical Overlap Proportion: {vertical_overlap_proportion}")
+    print(f"Tile Size Proportion: {tile_size_proportion}")
+    print(f"Background Proportion: {background_proportion}")
+    print()
+    splits: List[str] = find_splits(input_dataset_path)
     validate_yolo_dataset(input_dataset_path)
     create_output_dataset_directories(output_dataset_path, splits)
     tile_images(
