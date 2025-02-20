@@ -22,6 +22,37 @@ import numpy as np
 from tqdm import tqdm
 
 
+parser: ArgumentParser = ArgumentParser()
+parser.add_argument(
+    "input_dataset_path",
+    help="The filepath to the input YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "output_dataset_path",
+    help="The filepath to the output tiled YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "--horizontal_overlap_ratio",
+    help="The percent amount of overlap the tiles will have left and right.",
+    type=float,
+)
+parser.add_argument(
+    "--vertical_overlap_ratio",
+    help="The percent amount of overlap the tiles will have up and down.",
+    type=float,
+)
+tile_size_help_msg: str = (
+    "The size of each tile relative to the size of the full image."
+)
+tile_size_help_msg += (
+    "\nThe final value is based off the size of either the width or the height, whichever"
+)
+tile_size_help_msg += " is smaller."
+parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
+
+
 def read_horizontal_overlap_ratio(args: Namespace) -> float:
     """Reads the 'horizontal_overlap_ratio' parameter.
 
@@ -407,76 +438,47 @@ def undersample_background(labels_path: Path, images_path: Path, target_pcnt: fl
         os.remove(path)
 
 
-parser: ArgumentParser = ArgumentParser()
-parser.add_argument(
-    "input_dataset_path",
-    help="The filepath to the input YOLO dataset.",
-    type=str,
-)
-parser.add_argument(
-    "output_dataset_path",
-    help="The filepath to the output tiled YOLO dataset.",
-    type=str,
-)
-parser.add_argument(
-    "--horizontal_overlap_ratio",
-    help="The percent amount of overlap the tiles will have left and right.",
-    type=float,
-)
-parser.add_argument(
-    "--vertical_overlap_ratio",
-    help="The percent amount of overlap the tiles will have up and down.",
-    type=float,
-)
-tile_size_help_msg: str = (
-    "The size of each tile relative to the size of the full image."
-)
-tile_size_help_msg += (
-    "\nThe final value is based off the size of either the width or the height, whichever"
-)
-tile_size_help_msg += " is smaller."
-parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
-args: Namespace = parser.parse_args()
-
-horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
-vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
-tile_size_ratio: float = read_tile_size_ratio(parser)
-input_dataset_path: Path = read_input_dataset_path(parser)
-splits: List[str] = find_splits(input_dataset_path)
-output_dataset_path: Path = Path(parser.output_dataset_path)
-validate_yolo_dataset(input_dataset_path)
-create_output_dataset_directories(output_dataset_path, splits)
-tile_images(
-    input_dataset_path,
-    output_dataset_path,
-    splits,
-    tile_size_ratio,
-    horizontal_overlap_ratio,
-    vertical_overlap_ratio,
-)
-tile_annotations(
-    input_dataset_path,
-    output_dataset_path,
-    splits,
-    tile_size_ratio,
-    horizontal_overlap_ratio,
-    vertical_overlap_ratio,
-)
-undersample_background(
-    path_to_data
-    / "yolo_datasets"
-    / "new_bp_and_hr_one_vs_rest_hr"
-    / "labels"
-    / "train",
-    path_to_data
-    / "yolo_datasets"
-    / "new_bp_and_hr_one_vs_rest_hr"
-    / "images"
-    / "train",
-    0.15,
-)
-undersample_background(
-    path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "labels" / "val",
-    path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "images" / "val",
-    0.15,
-)
+if __name__ == "__main__":
+    args: Namespace = parser.parse_args()
+    horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
+    vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
+    tile_size_ratio: float = read_tile_size_ratio(parser)
+    input_dataset_path: Path = read_input_dataset_path(parser)
+    splits: List[str] = find_splits(input_dataset_path)
+    output_dataset_path: Path = Path(parser.output_dataset_path)
+    validate_yolo_dataset(input_dataset_path)
+    create_output_dataset_directories(output_dataset_path, splits)
+    tile_images(
+        input_dataset_path,
+        output_dataset_path,
+        splits,
+        tile_size_ratio,
+        horizontal_overlap_ratio,
+        vertical_overlap_ratio,
+    )
+    tile_annotations(
+        input_dataset_path,
+        output_dataset_path,
+        splits,
+        tile_size_ratio,
+        horizontal_overlap_ratio,
+        vertical_overlap_ratio,
+    )
+    undersample_background(
+        path_to_data
+        / "yolo_datasets"
+        / "new_bp_and_hr_one_vs_rest_hr"
+        / "labels"
+        / "train",
+        path_to_data
+        / "yolo_datasets"
+        / "new_bp_and_hr_one_vs_rest_hr"
+        / "images"
+        / "train",
+        0.15,
+    )
+    undersample_background(
+        path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "labels" / "val",
+        path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "images" / "val",
+        0.15,
+    )
