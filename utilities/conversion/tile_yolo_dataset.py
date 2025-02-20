@@ -1,7 +1,7 @@
 """Tiles a yolo dataset."""
 
 # Built-in Imports
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from glob import glob
 import os
 from pathlib import Path
@@ -22,102 +22,71 @@ import numpy as np
 from tqdm import tqdm
 
 
-parser: ArgumentParser = ArgumentParser()
-parser.add_argument(
-    "input_dataset_path",
-    help="The filepath to the input YOLO dataset.",
-    type=str,
-)
-parser.add_argument(
-    "output_dataset_path",
-    help="The filepath to the output tiled YOLO dataset.",
-    type=str,
-)
-parser.add_argument(
-    "--horizontal_overlap_ratio",
-    help="The amount of overlap the tiles will have left and right.",
-    type=float,
-)
-parser.add_argument(
-    "--vertical_overlap_ratio",
-    help="The amount of overlap the tiles will have up and down.",
-    type=float,
-)
-tile_size_help_msg: str = (
-    "The size of each tile relative to the size of the full image."
-)
-tile_size_help_msg += (
-    "\nIs based off the size of either the width or the height, whichever"
-)
-tile_size_help_msg += "is smaller."
-parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
-
-
-def read_horizontal_overlap_ratio(parser: ArgumentParser) -> float:
+def read_horizontal_overlap_ratio(args: Namespace) -> float:
     """Reads the 'horizontal_overlap_ratio' parameter.
 
     Args:
-        parser (ArgumentParser):
-            The ArgumentParser object that contains the command line arguments.
+        args (Namespace):
+            The argparse.Namespace object that contains the command line arg data.
 
     Returns:
         A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
         left and right.
     """
-    if not parser.horizontal_overlap_ratio:
+    if not args.horizontal_overlap_ratio:
         return 0.5
-    if 0 < parser.horizontal_overlap_ratio > 1:
-        err_message: str = f"{parser.horizontal_overlap_ratio} is an invalid value for"
+    if 0 < args.horizontal_overlap_ratio > 1:
+        err_message: str = f"{args.horizontal_overlap_ratio} is an invalid value for"
         err_message += "--horizontal_overlap_ratio. Must be between 0 and 1."
         raise ValueError(err_message)
-    return parser.horizontal_overlap_ratio
+    return args.horizontal_overlap_ratio
 
 
-def read_vertical_overlap_ratio(parser: ArgumentParser) -> float:
+def read_vertical_overlap_ratio(args: Namespace) -> float:
     """Reads the 'vertical_overlap_ratio' parameter.
 
     Args:
-        parser (ArgumentParser):
-            The ArgumentParser object that contains the command line arguments.
+        args (Namespace):
+            The argparse.Namespace object that contains the command line arg data.
 
     Returns:
         A float between 0 and 1 indicating the amount that two adjacent tiles will overlap
         up and down.
     """
-    if not parser.vertical_overlap_ratio:
+    if not args.vertical_overlap_ratio:
         return 0.5
-    if 0 < parser.vertical_overlap_ratio > 1:
-        err_message: str = f"{parser.vertical_overlap_ratio} is an invalid value for"
+    if 0 < args.vertical_overlap_ratio > 1:
+        err_message: str = f"{args.vertical_overlap_ratio} is an invalid value for"
         err_message += "--vertical_overlap_ratio. Must be between 0 and 1."
         raise ValueError(err_message)
-    return parser.vertical_overlap_ratio
+    return args.vertical_overlap_ratio
 
 
-def read_tile_size_ratio(parser: ArgumentParser) -> float:
+def read_tile_size_ratio(args: Namespace) -> float:
     """Reads the 'tile_size_ratio' parameter.
 
     Args:
-        parser (ArgumentParser):
-            The ArgumentParser object that contains the command line arguments.
+        args (Namespace):
+            The argparse.Namespace object that contains the command line arg data.
 
     Returns:
         A float between 0 and 1 indicating the size of a tile relative to the full image.
     """
-    if not parser.tile_size_ratio:
+    if not args.tile_size_ratio:
         return 0.5
-    if 0 < parser.tile_size_ratio > 1:
-        err_message: str = f"{parser.tile_size_ratio} is an invalid value for"
+    if 0 < args.tile_size_ratio > 1:
+        err_message: str = f"{args.tile_size_ratio} is an invalid value for"
         err_message += "--tile_size_ratio. Must be between 0 and 1."
         raise ValueError(err_message)
-    return parser.tile_size_ratio
+    return args.tile_size_ratio
 
 
-def read_input_dataset_path(parser: ArgumentParser) -> Path:
+def read_input_dataset_path(args: Namespace) -> Path:
     """Reads and validates the input_dataset_path argument.
 
     Args:
-        parser (ArgumentParser):
-            The ArgumentParser object that contains the command line arguments.
+        args (Namespace):
+            The argparse.Namespace object that contains the command line arg data.
 
     Raises:
         FileNotFoundError:
@@ -126,12 +95,12 @@ def read_input_dataset_path(parser: ArgumentParser) -> Path:
     Returns:
         A path to the input dataset.
     """
-    input_path: Path = Path(parser.input_dataset_path)
+    input_path: Path = Path(args.input_dataset_path)
     if not input_path.exists():
         raise FileNotFoundError(
             f"FileNotFoundError: No such file or directory at {str(input_path.resolve())}."
         )
-    elif not Path(parser.input_dataset_path).is_dir():
+    elif not Path(args.input_dataset_path).is_dir():
         raise Exception(
             f"Path exists but is not a directory: {str(input_path.resolve())}."
         )
@@ -401,72 +370,6 @@ def tile_annotations(
                             f.write(data_to_save)
 
 
-horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
-vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
-tile_size_ratio: float = read_tile_size_ratio(parser)
-input_dataset_path: Path = read_input_dataset_path(parser)
-splits: List[str] = find_splits(input_dataset_path)
-output_dataset_path: Path = Path(parser.output_dataset_path)
-validate_yolo_dataset(input_dataset_path)
-create_output_dataset_directories(output_dataset_path, splits)
-tile_images(
-    input_dataset_path,
-    output_dataset_path,
-    splits,
-    tile_size_ratio,
-    horizontal_overlap_ratio,
-    vertical_overlap_ratio,
-)
-
-for key in tqdm(images.keys()):
-    image: Image.Image = images[key]
-    im_name: str = Path(key).name
-    im_width, im_height = image.size
-    im_labels: List[Keypoint] = labels.get(key.replace(".JPG", ".txt"))
-    if im_labels == None:
-        continue
-    slice_size = min([int(im_width / 5), int(im_height / 5)])
-    image_tiles: List[List[Image.Image]] = tile_image(
-        image,
-        slice_size,  # SLICE_WIDTH,
-        slice_size,
-        HORZ_OVERLAP_RATIO,
-        VERT_OVERLAP_RATIO,
-    )
-    label_tiles: List[List[Keypoint]] = tile_annotations(
-        im_labels,
-        im_width,
-        im_height,
-        slice_size,
-        slice_size,
-        HORZ_OVERLAP_RATIO,
-        VERT_OVERLAP_RATIO,
-    )
-
-    for row_ix, row in enumerate(image_tiles):
-        for col_ix, image in enumerate(row):
-            image.save(str(IMG_DEST) + f"/{row_ix}_{col_ix}_" + im_name)
-
-    for row_ix, row in enumerate(label_tiles):
-        for col_ix, tile_labels in enumerate(row):
-            yolo_str: str = "\n".join(
-                [
-                    "0"
-                    + l.to_yolo(slice_size, slice_size, CATEGORY_TO_ID, 10, True)[1:]
-                    for l in tile_labels
-                    if l.category == "heart rate"
-                ]
-            )
-            if yolo_str != "":
-                with open(
-                    str(LAB_DEST)
-                    + f"/{row_ix}_{col_ix}_"
-                    + im_name.replace(".JPG", ".txt"),
-                    "w",
-                ) as f:
-                    f.write(yolo_str)
-
-
 def undersample_background(labels_path: Path, images_path: Path, target_pcnt: float):
     """Randomly deletes images with no instances of blood pressure in them to undersample the background.
 
@@ -504,6 +407,61 @@ def undersample_background(labels_path: Path, images_path: Path, target_pcnt: fl
         os.remove(path)
 
 
+parser: ArgumentParser = ArgumentParser()
+parser.add_argument(
+    "input_dataset_path",
+    help="The filepath to the input YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "output_dataset_path",
+    help="The filepath to the output tiled YOLO dataset.",
+    type=str,
+)
+parser.add_argument(
+    "--horizontal_overlap_ratio",
+    help="The percent amount of overlap the tiles will have left and right.",
+    type=float,
+)
+parser.add_argument(
+    "--vertical_overlap_ratio",
+    help="The percent amount of overlap the tiles will have up and down.",
+    type=float,
+)
+tile_size_help_msg: str = (
+    "The size of each tile relative to the size of the full image."
+)
+tile_size_help_msg += (
+    "\nThe final value is based off the size of either the width or the height, whichever"
+)
+tile_size_help_msg += " is smaller."
+parser.add_argument("--tile_size_ratio", help=tile_size_help_msg, type=float)
+args: Namespace = parser.parse_args()
+
+horizontal_overlap_ratio: float = read_horizontal_overlap_ratio(parser)
+vertical_overlap_ratio: float = read_vertical_overlap_ratio(parser)
+tile_size_ratio: float = read_tile_size_ratio(parser)
+input_dataset_path: Path = read_input_dataset_path(parser)
+splits: List[str] = find_splits(input_dataset_path)
+output_dataset_path: Path = Path(parser.output_dataset_path)
+validate_yolo_dataset(input_dataset_path)
+create_output_dataset_directories(output_dataset_path, splits)
+tile_images(
+    input_dataset_path,
+    output_dataset_path,
+    splits,
+    tile_size_ratio,
+    horizontal_overlap_ratio,
+    vertical_overlap_ratio,
+)
+tile_annotations(
+    input_dataset_path,
+    output_dataset_path,
+    splits,
+    tile_size_ratio,
+    horizontal_overlap_ratio,
+    vertical_overlap_ratio,
+)
 undersample_background(
     path_to_data
     / "yolo_datasets"
@@ -517,7 +475,6 @@ undersample_background(
     / "train",
     0.15,
 )
-
 undersample_background(
     path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "labels" / "val",
     path_to_data / "yolo_datasets" / "new_bp_and_hr_one_vs_rest_hr" / "images" / "val",
