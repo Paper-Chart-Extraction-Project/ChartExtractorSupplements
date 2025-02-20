@@ -214,7 +214,7 @@ def try_open_image(im_path: str) -> Optional[Image.Image]:
         return None
 
 
-def tile_images(
+def tile_dataset_images(
     input_dataset_path: Path,
     output_dataset_path: Path,
     splits: List[str],
@@ -239,9 +239,9 @@ def tile_images(
         vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
-    for split in splits:
+    for split in tqdm(splits, desc="Splits", position=0):
         image_paths: List[str] = glob(str(input_dataset_path / "images" / split / "*"))
-        for im_path in image_paths:
+        for im_path in tqdm(image_paths, desc="Images", position=1, leave=False):
             image: Optional[Image.Image] = try_open_image(im_path)
             if image is None:
                 continue
@@ -266,7 +266,7 @@ def tile_images(
                     )
 
 
-def tile_annotations(
+def tile_dataset_annotations(
     input_dataset_path: Path,
     output_dataset_path: Path,
     splits: List[str],
@@ -299,7 +299,7 @@ def tile_annotations(
         """
         image_size_dict: Dict[str, Tuple[int, int]] = dict()
         for split in splits:
-            for file in glob(str(input_dataset_path / split / "*")):
+            for file in glob(str(input_dataset_path / "images" / split / "*")):
                 image: Optional[Image.Image] = try_open_image(file)
                 if image is None:
                     continue
@@ -307,7 +307,6 @@ def tile_annotations(
         return image_size_dict
 
     image_size_dict: Dict[str, Tuple[int, int]] = create_image_size_dict()
-
     def try_open_annotation(
         ann_path: str,
     ) -> Optional[List[Union[BoundingBox, Keypoint]]]:
@@ -322,7 +321,7 @@ def tile_annotations(
         """
         try:
             text: List[str] = open(ann_path, "r").readlines()
-            if text[0].replace("\n", "").split(" ") > 5:
+            if len(text[0].replace("\n", "").split(" ")) > 5:
                 annotation_type = Keypoint
             else:
                 annotation_type = BoundingBox
@@ -331,24 +330,24 @@ def tile_annotations(
                 annotations.append(
                     annotation_type.from_yolo(
                         line.strip(),
-                        image_size_dict[ann_path.stem][0],
-                        image_size_dict[ann_path.stem][1],
-                        {line[0]:line[0]}
+                        image_size_dict[Path(ann_path).stem][0],
+                        image_size_dict[Path(ann_path).stem][1],
+                        {int(line[0]):line[0]}
                     )
                 )
             return annotations
         except:
             return None
 
-    for split in splits:
-        label_paths: List[str] = glob(str(input_dataset_path / split / "*"))
-        for lab_path in label_paths:
+    for split in tqdm(splits, desc="Splits", position=0):
+        label_paths: List[str] = glob(str(input_dataset_path / "labels" / split / "*"))
+        for lab_path in tqdm(label_paths, desc="Labels", position=1, leave=False):
             annotations: List[Union[BoundingBox, Keypoint]] = try_open_annotation(
                 lab_path
             )
             if annotations is None:
                 continue
-            width, height = image_size_dict[path(lab_path.stem)]
+            width, height = image_size_dict[Path(lab_path).stem]
             tile_size: int = min(width*tile_size_proportion, height*tile_size_proportion)
             annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = (
                 tile_annotations(
@@ -361,21 +360,20 @@ def tile_annotations(
                     vertical_overlap_proportion,
                 )
             )
-            for row in annotation_tiles:
-                for tile in row:
+            for row_ix, row in enumerate(annotation_tiles):
+                for col_ix, tile in enumerate(row):
                     data_to_save: str = "\n".join(
                         [
                             ann.category
-                            + l.to_yolo(slice_size, slice_size, {l.category:l.category}, 10, True)[
+                            + ann.to_yolo(tile_size, tile_size, {ann.category:int(ann.category)}, 10)[
                                 1:
                             ]
-                            for l in tile
+                            for ann in tile
                         ]
                     )
-                    if yolo_str != "":
+                    if data_to_save != "":
                         with open(
-                            str(output_dataset_path / split / Path(lab_path).stem)
-                            + ".txt",
+                            str(output_dataset_path / "labels" / split / f"{row_ix}_{col_ix}_{Path(lab_path).stem}.txt"),
                             "w",
                         ) as f:
                             f.write(data_to_save)
@@ -404,7 +402,7 @@ def undersample_background(
         ]
         background_paths: List[Path] = list(
             filter(
-                lambda im_path: im_path.stem not in [lab_path.stem for lab_path in labels], 
+                lambda im_path: im_path.stem not in [lab_path.stem for lab_path in label_paths], 
                 image_paths
             )
         )
@@ -412,6 +410,9 @@ def undersample_background(
         number_of_backgrounds_to_remove: int = int(
             len(background_paths) - np.ceil(total_size_of_target_dataset * target_pcnt)
         )
+        if number_of_backgrounds_to_remove < 1:
+            print(f"No backgrounds to remove in {split}.")
+            return
         backgrounds_to_remove: list[int] = sorted(
             np.random.choice(
                 a=len(background_paths), size=number_of_backgrounds_to_remove, replace=False
@@ -424,7 +425,7 @@ def undersample_background(
         ]
         files_to_delete += backgrounds_to_remove
     for path in tqdm(backgrounds_to_remove):
-        os.remove(files_to_delete)
+        os.remove(path)
 
 
 if __name__ == "__main__":
@@ -456,10 +457,20 @@ if __name__ == "__main__":
     print(f"Tile Size Proportion: {tile_size_proportion}")
     print(f"Background Proportion: {background_proportion}")
     print()
+    print("Finding splits.")
     splits: List[str] = find_splits(input_dataset_path)
+    print(f"Found the following splits: {splits}")
+    print()
+    print("Validating dataset.")
     validate_yolo_dataset(input_dataset_path)
+    print("Dataset valid.")
+    print()
+    print("Creating output directories.")
     create_output_dataset_directories(output_dataset_path, splits)
-    tile_images(
+    print("Output directories created.")
+    print()
+    print("Tiling images.")
+    tile_dataset_images(
         input_dataset_path,
         output_dataset_path,
         splits,
@@ -467,7 +478,10 @@ if __name__ == "__main__":
         horizontal_overlap_proportion,
         vertical_overlap_proportion,
     )
-    tile_annotations(
+    print("Finished tiling images.")
+    print()
+    print("Tiling annotations.")
+    tile_dataset_annotations(
         input_dataset_path,
         output_dataset_path,
         splits,
@@ -475,4 +489,10 @@ if __name__ == "__main__":
         horizontal_overlap_proportion,
         vertical_overlap_proportion,
     )
+    print("Finished tiling annotations.")
+    print()
+    print("Deleting excess background images.")
     undersample_background(output_dataset_path, splits, background_proportion)
+    print("Finished deleting excess background images.")
+    print()
+    print("Finished.")
