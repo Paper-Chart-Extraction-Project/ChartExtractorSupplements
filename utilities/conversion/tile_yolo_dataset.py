@@ -285,24 +285,6 @@ def tile_annotations(
         vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
-
-    class IdMirror:
-        """A bad hack for ID_TO_CATEGORY.
-
-        When reading an annotation from YOLO, the integer ID needs to be mapped to a string
-        encoding the actual class. Here, we are going straight from label to label, so while
-        we could pass in a dictionary that just has the identity mapping for a large number
-        of integers (ex: {1:1, 2:2, ..., 1,000,000:1,000,000}), this does the same with minimal
-        memory consumption.
-        """
-
-        # todo: add pyyaml and avoid this...
-        def __init__(self):
-            pass
-
-        def __getitem__(self, key: int) -> int:
-            return key
-
     def create_image_size_dict() -> Dict[str, Tuple[int, int]]:
         """Creates a dict with image filename stems mapped to image size (width, height).
 
@@ -345,7 +327,7 @@ def tile_annotations(
                         line.strip(),
                         image_size_dict[ann_path.stem][0],
                         image_size_dict[ann_path.stem][1],
-                        IdMirror(),
+                        {line[0]:line[0]}
                     )
                 )
             return annotations
@@ -376,7 +358,7 @@ def tile_annotations(
                     data_to_save: str = "\n".join(
                         [
                             ann.category
-                            + l.to_yolo(slice_size, slice_size, IdMirror(), 10, True)[
+                            + l.to_yolo(slice_size, slice_size, {l.category:l.category}, 10, True)[
                                 1:
                             ]
                             for l in tile
