@@ -246,8 +246,8 @@ def tile_dataset_images(
             if image is None:
                 continue
             tile_size: int = min(
-                image.size[0]*tile_size_proportion,
-                image.size[1]*tile_size_proportion
+                image.size[0] * tile_size_proportion,
+                image.size[1] * tile_size_proportion,
             )
             image_tiles: List[List[Image.Image]] = tile_image(
                 image,
@@ -258,7 +258,7 @@ def tile_dataset_images(
             )
             for row_ix, row in enumerate(image_tiles):
                 for col_ix, tile in enumerate(row):
-                    tile.save(
+                    tile.convert("RGB").save(
                         output_dataset_path
                         / "images"
                         / split
@@ -291,6 +291,7 @@ def tile_dataset_annotations(
         vertical_overlap_proportion (float):
             The proportion of overlap that two neighboring tiles should have up and down.
     """
+
     def create_image_size_dict() -> Dict[str, Tuple[int, int]]:
         """Creates a dict with image filename stems mapped to image size (width, height).
 
@@ -307,6 +308,7 @@ def tile_dataset_annotations(
         return image_size_dict
 
     image_size_dict: Dict[str, Tuple[int, int]] = create_image_size_dict()
+
     def try_open_annotation(
         ann_path: str,
     ) -> Optional[List[Union[BoundingBox, Keypoint]]]:
@@ -332,7 +334,7 @@ def tile_dataset_annotations(
                         line.strip(),
                         image_size_dict[Path(ann_path).stem][0],
                         image_size_dict[Path(ann_path).stem][1],
-                        {int(line[0]):line[0]}
+                        {int(line[0]): line[0]},
                     )
                 )
             return annotations
@@ -348,7 +350,9 @@ def tile_dataset_annotations(
             if annotations is None:
                 continue
             width, height = image_size_dict[Path(lab_path).stem]
-            tile_size: int = min(width*tile_size_proportion, height*tile_size_proportion)
+            tile_size: int = min(
+                width * tile_size_proportion, height * tile_size_proportion
+            )
             annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = (
                 tile_annotations(
                     annotations,
@@ -365,15 +369,23 @@ def tile_dataset_annotations(
                     data_to_save: str = "\n".join(
                         [
                             ann.category
-                            + ann.to_yolo(tile_size, tile_size, {ann.category:int(ann.category)}, 10)[
-                                1:
-                            ]
+                            + ann.to_yolo(
+                                tile_size,
+                                tile_size,
+                                {ann.category: int(ann.category)},
+                                10,
+                            )[1:]
                             for ann in tile
                         ]
                     )
                     if data_to_save != "":
                         with open(
-                            str(output_dataset_path / "labels" / split / f"{row_ix}_{col_ix}_{Path(lab_path).stem}.txt"),
+                            str(
+                                output_dataset_path
+                                / "labels"
+                                / split
+                                / f"{row_ix}_{col_ix}_{Path(lab_path).stem}.txt"
+                            ),
                             "w",
                         ) as f:
                             f.write(data_to_save)
@@ -395,18 +407,21 @@ def undersample_background(
     files_to_delete: List[Path] = list()
     for split in splits:
         label_paths: List[Path] = [
-            Path(s) for s in glob(str(output_dataset_path/"labels"/split/"*.txt"))
+            Path(s) for s in glob(str(output_dataset_path / "labels" / split / "*.txt"))
         ]
         image_paths: List[Path] = [
-            Path(s) for s in glob(str(output_dataset_path/"images"/split/"*.jpg"))
+            Path(s) for s in glob(str(output_dataset_path / "images" / split / "*.jpg"))
         ]
         background_paths: List[Path] = list(
             filter(
-                lambda im_path: im_path.stem not in [lab_path.stem for lab_path in label_paths], 
-                image_paths
+                lambda im_path: im_path.stem
+                not in [lab_path.stem for lab_path in label_paths],
+                image_paths,
             )
         )
-        total_size_of_target_dataset: int = np.ceil(len(label_paths) / (1 - target_pcnt))
+        total_size_of_target_dataset: int = np.ceil(
+            len(label_paths) / (1 - target_pcnt)
+        )
         number_of_backgrounds_to_remove: int = int(
             len(background_paths) - np.ceil(total_size_of_target_dataset * target_pcnt)
         )
@@ -415,7 +430,9 @@ def undersample_background(
             return
         backgrounds_to_remove: list[int] = sorted(
             np.random.choice(
-                a=len(background_paths), size=number_of_backgrounds_to_remove, replace=False
+                a=len(background_paths),
+                size=number_of_backgrounds_to_remove,
+                replace=False,
             )
         )
         backgrounds_to_remove: list[Path] = [
