@@ -6,9 +6,7 @@ from glob import glob
 import os
 from operator import attrgetter
 from pathlib import Path
-from PIL import Image
-import re
-import shutil
+from PIL import Image, ImageOps
 from typing import Dict, List, Optional, Tuple, Union
 
 # Internal Imports
@@ -209,7 +207,9 @@ def try_open_image(im_path: str) -> Optional[Image.Image]:
         An optional of a PIL Image.
     """
     try:
-        return Image.open(im_path)
+        im: Image.Image = Image.open(im_path)
+        im = ImageOps.exif_transpose(im, in_place=False)
+        return im
     except:
         return None
 
