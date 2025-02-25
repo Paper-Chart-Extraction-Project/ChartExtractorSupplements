@@ -334,11 +334,12 @@ def tile_dataset_annotations(
                         line.strip(),
                         image_size_dict[Path(ann_path).stem][0],
                         image_size_dict[Path(ann_path).stem][1],
-                        {int(line[0]): line[0]},
+                        {int(line.split(" ")[0]): line[0]},
                     )
                 )
             return annotations
-        except:
+        except Exception as e:
+            print(e)
             return None
 
     for split in tqdm(splits, desc="Splits", position=0):
@@ -348,10 +349,11 @@ def tile_dataset_annotations(
                 lab_path
             )
             if annotations is None:
+                print(f"Could not open annotation at {lab_path}.")
                 continue
             width, height = image_size_dict[Path(lab_path).stem]
-            tile_size: int = min(
-                width * tile_size_proportion, height * tile_size_proportion
+            tile_size: int = int(
+                min(width * tile_size_proportion, height * tile_size_proportion)
             )
             annotation_tiles: List[List[List[Union[BoundingBox, Keypoint]]]] = (
                 tile_annotations(
