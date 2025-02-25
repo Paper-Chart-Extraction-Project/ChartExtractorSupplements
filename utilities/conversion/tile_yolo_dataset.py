@@ -4,7 +4,7 @@ This module provides functionality to tile a YOLO dataset. It takes an input
 YOLO dataset, tiles its images and annotations based on user-defined
 parameters, and saves the resulting tiles as a new YOLO dataset. It also
 includes an option to undersample background images to achieve a specified
-background proportion.
+proportion of backgrounds in the dataset.
 
 Command Line Arguments:
     input_dataset_path (str):
