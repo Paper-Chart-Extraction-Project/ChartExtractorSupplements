@@ -1,4 +1,32 @@
-"""Tiles a yolo dataset."""
+"""Tiles a yolo dataset.
+
+This module provides functionality to tile a YOLO dataset. It takes an input
+YOLO dataset, tiles its images and annotations based on user-defined
+parameters, and saves the resulting tiles as a new YOLO dataset. It also
+includes an option to undersample background images to achieve a specified
+background proportion.
+
+Command Line Arguments:
+    input_dataset_path (str):
+        The filepath to the input YOLO dataset.
+    output_dataset_path (str):
+        The filepath to the output tiled YOLO dataset.
+    --background_proportion (float, optional):
+        Proportion of background images in the final dataset (Default: 0.15).
+        Must be between 0 and 1.
+    --horizontal_overlap_proportion (float, optional):
+        The percent amount of horizontal overlap for tiles (Default: 0.5).
+        Must be between 0 and 1.
+    --vertical_overlap_proportion (float, optional):
+        The percent amount vertical overlap for tiles (Default: 0.5).
+        Must be between 0 and 1.
+    --tile_size_proportion (float, optional):
+        The percent of the image's height or width (whichever is smaller) to
+        make each tile (Default: 0.2).
+        Must be between 0 and 1.
+    --random_seed (int, optional):
+        The random seed to use for numpy.
+"""
 
 # Built-in Imports
 from argparse import ArgumentParser, Namespace
