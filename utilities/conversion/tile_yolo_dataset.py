@@ -6,7 +6,7 @@ from glob import glob
 import os
 from operator import attrgetter
 from pathlib import Path
-from PIL import Image, ImageOps
+import sys
 from typing import Dict, List, Optional, Tuple, Union
 
 # Internal Imports
@@ -18,6 +18,7 @@ from ChartExtractor.utilities.tiling import (
 
 # External Imports
 import numpy as np
+from PIL import Image, ImageOps
 from tqdm import tqdm
 
 
@@ -478,6 +479,9 @@ if __name__ == "__main__":
     print()
     print("Finding splits.")
     splits: List[str] = find_splits(input_dataset_path)
+    if splits == []:
+        print("No splits found. Check input paths.")
+        sys.exit(0)
     print(f"Found the following splits: {splits}")
     print()
     print("Validating dataset.")
