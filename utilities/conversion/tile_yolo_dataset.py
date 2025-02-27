@@ -358,12 +358,13 @@ def tile_dataset_annotations(
                 annotation_type = BoundingBox
             annotations: List[Union[BoundingBox, Keypoint]] = list()
             for line in text:
+                category: str = line.split(" ")[0]
                 annotations.append(
                     annotation_type.from_yolo(
                         line.strip(),
                         image_size_dict[Path(ann_path).stem][0],
                         image_size_dict[Path(ann_path).stem][1],
-                        {int(line.split(" ")[0]): line[0]},
+                        {int(category): category},
                     )
                 )
             return annotations
