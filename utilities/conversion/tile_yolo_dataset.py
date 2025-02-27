@@ -358,15 +358,14 @@ def tile_dataset_annotations(
                 annotation_type = BoundingBox
             annotations: List[Union[BoundingBox, Keypoint]] = list()
             for line in text:
-                category: str = line.split(" ")[0]
-                annotations.append(
-                    annotation_type.from_yolo(
-                        line.strip(),
-                        image_size_dict[Path(ann_path).stem][0],
-                        image_size_dict[Path(ann_path).stem][1],
-                        {int(category): category},
-                    )
+                category: str = line.replace("\n", "").split(" ")[0]
+                ann: Union[BoundingBox, Keypoint] = annotation_type.from_yolo(
+                    line.strip(),
+                    image_size_dict[Path(ann_path).stem][0],
+                    image_size_dict[Path(ann_path).stem][1],
+                    {int(category): category},
                 )
+                annotations.append(ann)
             return annotations
         except Exception as e:
             print(e)
@@ -400,13 +399,12 @@ def tile_dataset_annotations(
                 for col_ix, tile in enumerate(row):
                     data_to_save: str = "\n".join(
                         [
-                            ann.category
-                            + ann.to_yolo(
+                            ann.to_yolo(
                                 tile_size,
                                 tile_size,
                                 {ann.category: int(ann.category)},
                                 10,
-                            )[1:]
+                            )
                             for ann in tile
                         ]
                     )
