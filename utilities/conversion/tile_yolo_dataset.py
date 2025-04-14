@@ -434,7 +434,6 @@ def undersample_background(
         target_pcnt (float):
             A number between 0 and 1 determining the target percentage of backgrounds.
     """
-    files_to_delete: List[Path] = list()
     for split in splits:
         label_paths: List[Path] = [
             Path(s) for s in glob(str(output_dataset_path / "labels" / split / "*.txt"))
@@ -470,9 +469,8 @@ def undersample_background(
             for (ix, im_to_remove) in enumerate(background_paths)
             if ix in backgrounds_to_remove
         ]
-        files_to_delete += backgrounds_to_remove
-    for path in tqdm(backgrounds_to_remove):
-        os.remove(path)
+        for path in tqdm(backgrounds_to_remove):
+            os.remove(path)
 
 
 if __name__ == "__main__":
