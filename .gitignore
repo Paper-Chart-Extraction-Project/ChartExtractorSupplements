@@ -1,3 +1,6 @@
+point_registration/figures
+point_registration/hold
+point_registration/gif_img
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
