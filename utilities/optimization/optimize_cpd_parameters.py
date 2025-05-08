@@ -8,8 +8,10 @@ The optimization is handled by the Optuna package.
 """
 
 from __future__ import division
+import argparse
 from builtins import super
 from collections import namedtuple
+from functools import partial
 import json
 import numbers
 import numpy as np
@@ -19,6 +21,8 @@ import re
 from typing import List
 from warnings import warn
 
+
+# pycpd code
 
 def is_positive_semi_definite(R):
     if not isinstance(R, (np.ndarray, np.generic)):
@@ -533,3 +537,39 @@ class DeformableRegistration(EMRegistration):
             Deformable transformation matrix.
         """
         return self.G, self.W
+
+# Custom argparse type converters
+def validate_path(path_str: str, is_dir: bool) -> Path:
+    """Validates and creates a path object from a string."""
+    path: Path = Path(path_str)
+    if not path.exists():
+        raise FileNotFoundError(f"No such file or directory \'{path.resolve()}\'")
+    if is_dir and not path.is_dir():
+        raise FileNotFoundError(f"\'{path.resolve()}\' is not a directory.")
+    if not is_dir and path.is_dir():
+        raise FileNotFoundError(f"\'{path.resolve()}\' is a directory, but a file was expected.")
+    return path
+
+validate_file = partial(validate_path, is_dir=False)
+validate_dir = partial(validate_path, is_dir=True)
+
+# Parse command line args
+parser = argparse.ArgumentParser(
+    description="Optimize the coherent point drift parameters for a label studio dataset."
+)
+parser.add_argument(
+    "path_to_labels",
+    type=validate_file,
+    description="The filepath to the labelstudio json-min file."
+)
+parser.add_argument(
+    "output_directory",
+    type=validate_dir
+)
+parser.add_argument(
+    "--num_trials",
+    type=int,
+    default=1000
+)
+parser.parse_args()
+
