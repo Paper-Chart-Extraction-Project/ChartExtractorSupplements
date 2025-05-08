@@ -24,6 +24,7 @@ from warnings import warn
 
 # pycpd code
 
+
 def is_positive_semi_definite(R):
     if not isinstance(R, (np.ndarray, np.generic)):
         raise ValueError(
@@ -538,14 +539,17 @@ class DeformableRegistration(EMRegistration):
         """
         return self.G, self.W
 
-# Custom argparse type converters
+
+# Custom argparse type converter
 def validate_file(path_str: str, must_already_exist: bool) -> Path:
     """Validates and creates a path object from a string."""
     path: Path = Path(path_str)
     if must_already_exist and not path.exists():
-        raise FileNotFoundError(f"No such file or directory \'{path.resolve()}\'")
+        raise FileNotFoundError(f"No such file or directory '{path.resolve()}'")
     if path.is_dir():
-        raise FileNotFoundError(f"\'{path.resolve()}\' is a directory, but a file was expected.")
+        raise FileNotFoundError(
+            f"'{path.resolve()}' is a directory, but a file was expected."
+        )
     return path
 
 
@@ -556,42 +560,46 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "path_to_labels",
     type=partial(validate_file, must_already_exist=True),
-    help="The filepath to the labelstudio json-min file."
+    help="The filepath to the labelstudio json-min file.",
 )
 parser.add_argument(
     "path_to_output",
     type=partial(validate_file, must_already_exist=False),
-    help="The output file to write the best parameters to."
+    help="The output file to write the best parameters to.",
 )
 parser.add_argument(
     "--num_trials",
     type=int,
     default=1000,
-    help="The number of trials for the optimization."
+    help="The number of trials for the optimization.",
 )
+alpha_upper_bound_help_text: str = "The upper bound to search for the alpha value "
+alpha_upper_bound_help_text += "(called lambda in the paper). Defaults to 1e20."
 parser.add_argument(
     "--alpha_upper_bound",
     type=int,
     default=1e20,
-    help="The upper bound to search for the alpha value (called lambda in the paper)."
+    help=alpha_upper_bound_help_text,
 )
+alpha_lower_bound_help_text: str = "The lower bound to search for the alpha value "
+alpha_lower_bound_help_text += "(called lambda in the paper). Defaults to 1e-20."
 parser.add_argument(
     "--alpha_lower_bound",
     type=int,
     default=1e-20,
-    help="The upper bound to search for the alpha value (called lambda in the paper)."
+    help=alpha_lower_bound_help_text,
 )
 parser.add_argument(
     "--beta_upper_bound",
     type=int,
     default=1e5,
-    help="The upper bound to search for the beta value."
+    help="The upper bound to search for the beta value. Defaults to 1e5.",
 )
 parser.add_argument(
     "--beta_lower_bound",
     type=int,
     default=1e-5,
-    help="The upper bound to search for the beta value."
+    help="The upper bound to search for the beta value. Defaults to 1e-5.",
 )
 
 args = parser.parse_args()
@@ -599,12 +607,14 @@ args = parser.parse_args()
 # Optimization logic
 NamedPoint = namedtuple("NamedPoint", "name x y")
 image_name_regex_pattern: str = r"RC_\d\d\d\d_intraoperative.JPG"
-scanned_chart_regex_pattern: str = r"unified_intraoperative_preoperative_flowsheet_v1_1_front\.png"
+scanned_chart_regex_pattern: str = (
+    r"unified_intraoperative_preoperative_flowsheet_v1_1_(front|back)\.(png|jpg)"
+)
 
 
 def read_json_data(path: Path) -> Dict:
     """Reads a json file."""
-    return json.loads(open(str(path.resolve()), 'r').read())
+    return json.loads(open(str(path), "r").read())
 
 
 def extract_pattern_from_string(s: str, pattern: str) -> Optional[str]:
@@ -622,12 +632,11 @@ def extract_image_name_from_string(s: str) -> str:
         return image_name
 
     scanned_chart_name: Optional[str] = extract_pattern_from_string(
-        s,
-        scanned_chart_regex_pattern
+        s, scanned_chart_regex_pattern
     )
     if scanned_chart_name is not None:
         return scanned_chart_name
-    
+
     err_msg: str = f"name {s} does not conform to either the image name "
     err_msg += "regex pattern, or the scanned chart regex pattern."
     raise ValueError(err_msg)
@@ -637,8 +646,8 @@ def convert_label_dict_to_namedpoint(lab_dict: Dict) -> NamedPoint:
     """Converts the 'label' dictionary from label-studio json-min format to a NamedPoint."""
     return NamedPoint(
         name=lab_dict["rectanglelabels"][0],
-        x=(lab_dict["x"]+0.5*lab_dict["width"])/100,
-        y=(lab_dict["y"]+0.5*lab_dict["height"])/100,
+        x=(lab_dict["x"] + 0.5 * lab_dict["width"]) / 100,
+        y=(lab_dict["y"] + 0.5 * lab_dict["height"]) / 100,
     )
 
 
@@ -649,7 +658,7 @@ def named_point_list_to_numpy_array(named_points: List[NamedPoint]) -> np.array:
 
 def distance(np1: NamedPoint, np2: NamedPoint) -> float:
     """Calculates the euclidean distance between two NamedPoints."""
-    return np.sqrt((np1.x-np2.x)**2+(np1.y-np2.y)**2)
+    return np.sqrt((np1.x - np2.x) ** 2 + (np1.y - np2.y) ** 2)
 
 
 def create_deformable_registration(
@@ -672,8 +681,8 @@ def compute_matching_accuracy(
     Y: List[NamedPoint],
     alpha: float,
     beta: float,
-    dist_func: Callable[[NamedPoint, NamedPoint], float]=distance,
-    err_func: Callable[[float], float]=lambda err: err
+    dist_func: Callable[[NamedPoint, NamedPoint], float] = distance,
+    err_func: Callable[[float], float] = lambda err: err,
 ) -> float:
     """Computes the error for a CPD matching."""
     def_reg: DeformableRegistration = create_deformable_registration(X, Y, alpha, beta)
@@ -690,23 +699,36 @@ def compute_matching_accuracy(
 
 # Perform optimization
 image_name_to_points_map: Dict[str, List[NamedPoint]] = {
-    extract_image_name_from_string(d["image"]):[convert_label_dict_to_namedpoint(lab) for lab in d["label"]]
+    extract_image_name_from_string(d["image"]): [
+        convert_label_dict_to_namedpoint(lab) for lab in d["label"]
+    ]
     for d in read_json_data(args.path_to_labels)
 }
-perfect_points_key: str = list(
+
+perfect_points_key: List[str] = list(
     filter(
         lambda s: extract_pattern_from_string(s, image_name_regex_pattern),
-        image_name_to_points_map, 
+        image_name_to_points_map,
     )
-)[0]
+)
+try:
+    perfect_points_key = perfect_points_key[0]
+except:
+    raise Error("Cannot find the scanned chart labels.")
+
 perfect_points: List[NamedPoint] = image_name_to_points_map[perfect_points_key]
 regular_points: Dict[str, List[NamedPoint]] = {
-    k:v for (k, v) in image_name_to_points_map.items() if k != perfect_points_key
+    k: v for (k, v) in image_name_to_points_map.items() if k != perfect_points_key
 }
 
+
 def objective(trial):
-    alpha: float = trial.suggest_float('alpha', args.alpha_lower_bound, args.alpha_upper_bound)
-    beta: float = trial.suggest_float('beta', args.beta_lower_bound, args.beta_upper_bound)
+    alpha: float = trial.suggest_float(
+        "alpha", args.alpha_lower_bound, args.alpha_upper_bound
+    )
+    beta: float = trial.suggest_float(
+        "beta", args.beta_lower_bound, args.beta_upper_bound
+    )
     accuracies: List[float] = [
         compute_matching_accuracy(v, perfect_points, alpha, beta)
         for v in regular_points.values()
@@ -717,5 +739,5 @@ def objective(trial):
 study = optuna.create_study()
 study.optimize(objective, args.num_trials)
 
-with open(args.path_to_output, 'w') as f:
+with open(args.path_to_output, "w") as f:
     f.write(json.dumps(study.best_params))
