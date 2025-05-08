@@ -539,19 +539,15 @@ class DeformableRegistration(EMRegistration):
         return self.G, self.W
 
 # Custom argparse type converters
-def validate_path(path_str: str, is_dir: bool) -> Path:
+def validate_file(path_str: str, must_already_exist: bool) -> Path:
     """Validates and creates a path object from a string."""
     path: Path = Path(path_str)
-    if not path.exists():
+    if must_already_exist and not path.exists():
         raise FileNotFoundError(f"No such file or directory \'{path.resolve()}\'")
-    if is_dir and not path.is_dir():
-        raise FileNotFoundError(f"\'{path.resolve()}\' is not a directory.")
-    if not is_dir and path.is_dir():
+    if path.is_dir():
         raise FileNotFoundError(f"\'{path.resolve()}\' is a directory, but a file was expected.")
     return path
 
-validate_file = partial(validate_path, is_dir=False)
-validate_dir = partial(validate_path, is_dir=True)
 
 # Parse command line args
 parser = argparse.ArgumentParser(
@@ -559,13 +555,13 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument(
     "path_to_labels",
-    type=validate_file,
+    type=partial(validate_file, must_already_exist=True),
     help="The filepath to the labelstudio json-min file."
 )
 parser.add_argument(
-    "output_directory",
-    type=validate_dir,
-    help="The directory path where the output should go."
+    "path_to_output",
+    type=partial(validate_file, must_already_exist=False),
+    help="The output file to write the best parameters to."
 )
 parser.add_argument(
     "--num_trials",
@@ -695,3 +691,6 @@ def objective(trial):
 
 study = optuna.create_study()
 study.optimize(objective, args.num_trials)
+
+with open(args.path_to_output, 'w') as f:
+    f.write(json.dumps(study.best_params))
