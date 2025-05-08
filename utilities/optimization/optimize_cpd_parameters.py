@@ -569,6 +569,31 @@ parser.add_argument(
     default=1000,
     help="The number of trials for the optimization."
 )
+parser.add_argument(
+    "--alpha_upper_bound",
+    type=int,
+    default=1e20,
+    help="The upper bound to search for the alpha value (called lambda in the paper)."
+)
+parser.add_argument(
+    "--alpha_lower_bound",
+    type=int,
+    default=1e-20,
+    help="The upper bound to search for the alpha value (called lambda in the paper)."
+)
+parser.add_argument(
+    "--beta_upper_bound",
+    type=int,
+    default=1e5,
+    help="The upper bound to search for the beta value."
+)
+parser.add_argument(
+    "--beta_lower_bound",
+    type=int,
+    default=1e-5,
+    help="The upper bound to search for the beta value."
+)
+
 args = parser.parse_args()
 
 # Optimization logic
@@ -680,8 +705,8 @@ regular_points: Dict[str, List[NamedPoint]] = {
 }
 
 def objective(trial):
-    alpha: float = trial.suggest_float('alpha', 1e-20, 1e20)
-    beta: float = trial.suggest_float('beta', 1e-5, 1e5)
+    alpha: float = trial.suggest_float('alpha', args.alpha_lower_bound, args.alpha_upper_bound)
+    beta: float = trial.suggest_float('beta', args.beta_lower_bound, args.beta_upper_bound)
     accuracies: List[float] = [
         compute_matching_accuracy(v, perfect_points, alpha, beta)
         for v in regular_points.values()
