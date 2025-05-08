@@ -18,7 +18,7 @@ import numpy as np
 import optuna
 from pathlib import Path
 import re
-from typing import List
+from typing import Callable, Dict, List, Optional
 from warnings import warn
 
 
@@ -560,16 +560,90 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "path_to_labels",
     type=validate_file,
-    description="The filepath to the labelstudio json-min file."
+    help="The filepath to the labelstudio json-min file."
 )
 parser.add_argument(
     "output_directory",
-    type=validate_dir
+    type=validate_dir,
+    help="The directory path where the output should go."
 )
 parser.add_argument(
     "--num_trials",
     type=int,
-    default=1000
+    default=1000,
+    help="The number of trials for the optimization."
 )
 parser.parse_args()
 
+# Optimization logic
+NamedPoint = namedtuple("NamedPoint", "name x y")
+image_name_regex_pattern: str = r"RC_\d\d\d\d_intraoperative.JPG"
+scanned_chart_name: str = "unified_intraoperative_preoperative_flowsheet_v1_1_front.png"
+
+
+def read_json_data(path: Path) -> Dict:
+    """Reads a json file."""
+    return json.loads(open(str(path.resolve()), 'r').read())
+
+
+def extract_pattern_from_string(s: str, pattern: str) -> Optional[str]:
+    """Extracts a regex pattern from a string."""
+    try:
+        return re.findall(s, pattern)[0]
+    except:
+        return None
+
+
+def convert_label_dict_to_namedpoint(lab_dict: Dict) -> NamedPoint:
+    """Converts the 'label' dictionary from label-studio json-min format to a NamedPoint."""
+    return NamedPoint(
+        name=l["rectanglelabels"][0],
+        x=(l["x"]+0.5*l["width"])/100,
+        y=(l["y"]+0.5*l["height"])/100,
+    )
+
+
+def named_point_list_to_numpy_array(named_points: List[NamedPoint]) -> np.array:
+    """Converts a list of NamedPoints to a numpy array of [x, y] points."""
+    return np.array([[np.x, np.y] for np in named_points])
+
+
+def distance(np1: NamedPoint, np2: NamedPoint) -> float:
+    """Calculates the euclidean distance between two NamedPoints."""
+    return np.sqrt((np1.x-np2.x)**2+(np1.y-np2.y)**2)
+
+
+def create_deformable_registration(
+    X: List[NamedPoint],
+    Y: List[NamedPoint],
+    alpha: float,
+    beta: float,
+) -> DeformableRegistration:
+    """Creates a DeformableRegistration object from the given parameters."""
+    return DeformableRegistration(
+        X=named_point_list_to_numpy_array(X),
+        Y=named_point_list_to_numpy_array(Y),
+        alpha=alpha,
+        beta=beta,
+    )
+
+
+def compute_matching_accuracy(
+    X: List[NamedPoint],
+    Y: List[NamedPoint],
+    alpha: float,
+    beta: float,
+    dist_func: Callable[[NamedPoint, NamedPoint], float]=distance,
+    err_func: Callable[[float], float]=lambda err: err
+) -> float:
+    """Computes the error for a CPD matching."""
+    def_reg: DeformableRegistration = create_deformable_registration(X, Y, alpha, beta)
+    def_reg.register()
+    transformed_points: List[NamedPoint] = [
+        NamedPoint(name, point[0], point[1])
+        for (name, point) in list(zip([np.name for np in X], def_reg.TY.tolist()))
+    ]
+    errors: List[float] = [
+        distance(np1, np2) for (np1, np2) in list(zip(transformed_points, Y))
+    ]
+    return sum(err_func(e) for e in errors)
