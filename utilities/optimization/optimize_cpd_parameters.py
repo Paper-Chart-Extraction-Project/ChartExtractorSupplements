@@ -573,12 +573,12 @@ parser.add_argument(
     default=1000,
     help="The number of trials for the optimization."
 )
-parser.parse_args()
+args = parser.parse_args()
 
 # Optimization logic
 NamedPoint = namedtuple("NamedPoint", "name x y")
 image_name_regex_pattern: str = r"RC_\d\d\d\d_intraoperative.JPG"
-scanned_chart_name: str = "unified_intraoperative_preoperative_flowsheet_v1_1_front.png"
+scanned_chart_regex_pattern: str = r"unified_intraoperative_preoperative_flowsheet_v1_1_front\.png"
 
 
 def read_json_data(path: Path) -> Dict:
@@ -589,17 +589,35 @@ def read_json_data(path: Path) -> Dict:
 def extract_pattern_from_string(s: str, pattern: str) -> Optional[str]:
     """Extracts a regex pattern from a string."""
     try:
-        return re.findall(s, pattern)[0]
+        return re.findall(pattern, s)[0]
     except:
         return None
+
+
+def extract_image_name_from_string(s: str) -> str:
+    """Extracts the image name from a string."""
+    image_name: str = extract_pattern_from_string(s, image_name_regex_pattern)
+    if image_name is not None:
+        return image_name
+
+    scanned_chart_name: Optional[str] = extract_pattern_from_string(
+        s,
+        scanned_chart_regex_pattern
+    )
+    if scanned_chart_name is not None:
+        return scanned_chart_name
+    
+    err_msg: str = f"name {s} does not conform to either the image name "
+    err_msg += "regex pattern, or the scanned chart regex pattern."
+    raise ValueError(err_msg)
 
 
 def convert_label_dict_to_namedpoint(lab_dict: Dict) -> NamedPoint:
     """Converts the 'label' dictionary from label-studio json-min format to a NamedPoint."""
     return NamedPoint(
-        name=l["rectanglelabels"][0],
-        x=(l["x"]+0.5*l["width"])/100,
-        y=(l["y"]+0.5*l["height"])/100,
+        name=lab_dict["rectanglelabels"][0],
+        x=(lab_dict["x"]+0.5*lab_dict["width"])/100,
+        y=(lab_dict["y"]+0.5*lab_dict["height"])/100,
     )
 
 
@@ -647,3 +665,33 @@ def compute_matching_accuracy(
         distance(np1, np2) for (np1, np2) in list(zip(transformed_points, Y))
     ]
     return sum(err_func(e) for e in errors)
+
+
+# Perform optimization
+image_name_to_points_map: Dict[str, List[NamedPoint]] = {
+    extract_image_name_from_string(d["image"]):[convert_label_dict_to_namedpoint(lab) for lab in d["label"]]
+    for d in read_json_data(args.path_to_labels)
+}
+perfect_points_key: str = list(
+    filter(
+        lambda s: extract_pattern_from_string(s, image_name_regex_pattern),
+        image_name_to_points_map, 
+    )
+)[0]
+perfect_points: List[NamedPoint] = image_name_to_points_map[perfect_points_key]
+regular_points: Dict[str, List[NamedPoint]] = {
+    k:v for (k, v) in image_name_to_points_map.items() if k != perfect_points_key
+}
+
+def objective(trial):
+    alpha: float = trial.suggest_float('alpha', 1e-20, 1e20)
+    beta: float = trial.suggest_float('beta', 1e-5, 1e5)
+    accuracies: List[float] = [
+        compute_matching_accuracy(v, perfect_points, alpha, beta)
+        for v in regular_points.values()
+    ]
+    return np.mean(accuracies)
+
+
+study = optuna.create_study()
+study.optimize(objective, args.num_trials)
