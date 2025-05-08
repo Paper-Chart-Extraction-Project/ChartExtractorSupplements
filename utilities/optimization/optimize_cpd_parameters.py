@@ -3,28 +3,40 @@
 The code that performs CPD here is from the pycpd package by Siavash Khallaghi. I copy pasted
 it here instead of importing to reduce dependencies and also to prepare for using a Rust
 implementation in the future.
+
+The optimization is handled by the Optuna package.
 """
 
 from __future__ import division
 from builtins import super
+from collections import namedtuple
+import json
 import numbers
 import numpy as np
+import optuna
+from pathlib import Path
+import re
+from typing import List
 from warnings import warn
 
 
 def is_positive_semi_definite(R):
     if not isinstance(R, (np.ndarray, np.generic)):
-        raise ValueError('Encountered an error while checking if the matrix is positive semi definite. \
-            Expected a numpy array, instead got : {}'.format(R))
+        raise ValueError(
+            "Encountered an error while checking if the matrix is positive semi definite. \
+            Expected a numpy array, instead got : {}".format(R)
+        )
     return np.all(np.linalg.eigvals(R) > 0)
+
 
 def gaussian_kernel(X, beta, Y=None):
     if Y is None:
         Y = X
-    diff = X[:, None, :] - Y[None, :,  :]
+    diff = X[:, None, :] - Y[None, :, :]
     diff = np.square(diff)
     diff = np.sum(diff, 2)
     return np.exp(-diff / (2 * beta**2))
+
 
 def low_rank_eigen(G, num_eig):
     """
@@ -37,6 +49,7 @@ def low_rank_eigen(G, num_eig):
     S = S[eig_indices]  # eigenvalues.
     return Q, S
 
+
 def initialize_sigma2(X, Y):
     """
     Initialize the variance (sigma2).
@@ -45,10 +58,10 @@ def initialize_sigma2(X, Y):
     ----------
     X: numpy array
         NxD array of points for target.
-    
+
     Y: numpy array
         MxD array of points for source.
-    
+
     Returns
     -------
     sigma2: float
@@ -57,13 +70,14 @@ def initialize_sigma2(X, Y):
     (N, D) = X.shape
     (M, _) = Y.shape
     diff = X[None, :, :] - Y[:, None, :]
-    err = diff ** 2
+    err = diff**2
     return np.sum(err) / (D * M * N)
+
 
 def lowrankQS(G, beta, num_eig, eig_fgt=False):
     """
     Calculate eigenvectors and eigenvalues of gaussian matrix G.
-    
+
     !!!
     This function is a placeholder for implementing the fast
     gauss transform. It is not yet implemented.
@@ -73,15 +87,15 @@ def lowrankQS(G, beta, num_eig, eig_fgt=False):
     ----------
     G: numpy array
         Gaussian kernel matrix.
-    
+
     beta: float
         Width of the Gaussian kernel.
-    
+
     num_eig: int
         Number of eigenvectors to use in lowrank calculation of G
-    
+
     eig_fgt: bool
-        If True, use fast gauss transform method to speed up. 
+        If True, use fast gauss transform method to speed up.
     """
 
     # if we do not use FGT we construct affinity matrix G and find the
@@ -96,7 +110,8 @@ def lowrankQS(G, beta, num_eig, eig_fgt=False):
         return Q, S
 
     elif eig_fgt is True:
-        raise Exception('Fast Gauss Transform Not Implemented!')
+        raise Exception("Fast Gauss Transform Not Implemented!")
+
 
 class EMRegistration(object):
     """
@@ -165,37 +180,68 @@ class EMRegistration(object):
 
     """
 
-    def __init__(self, X, Y, sigma2=None, max_iterations=None, tolerance=None, w=None, *args, **kwargs):
+    def __init__(
+        self,
+        X,
+        Y,
+        sigma2=None,
+        max_iterations=None,
+        tolerance=None,
+        w=None,
+        *args,
+        **kwargs,
+    ):
         if type(X) is not np.ndarray or X.ndim != 2:
-            raise ValueError(
-                "The target point cloud (X) must be at a 2D numpy array.")
+            raise ValueError("The target point cloud (X) must be at a 2D numpy array.")
 
         if type(Y) is not np.ndarray or Y.ndim != 2:
-            raise ValueError(
-                "The source point cloud (Y) must be a 2D numpy array.")
+            raise ValueError("The source point cloud (Y) must be a 2D numpy array.")
 
         if X.shape[1] != Y.shape[1]:
             raise ValueError(
-                "Both point clouds need to have the same number of dimensions.")
+                "Both point clouds need to have the same number of dimensions."
+            )
 
-        if sigma2 is not None and (not isinstance(sigma2, numbers.Number) or sigma2 <= 0):
+        if sigma2 is not None and (
+            not isinstance(sigma2, numbers.Number) or sigma2 <= 0
+        ):
             raise ValueError(
-                "Expected a positive value for sigma2 instead got: {}".format(sigma2))
+                "Expected a positive value for sigma2 instead got: {}".format(sigma2)
+            )
 
-        if max_iterations is not None and (not isinstance(max_iterations, numbers.Number) or max_iterations < 0):
+        if max_iterations is not None and (
+            not isinstance(max_iterations, numbers.Number) or max_iterations < 0
+        ):
             raise ValueError(
-                "Expected a positive integer for max_iterations instead got: {}".format(max_iterations))
-        elif isinstance(max_iterations, numbers.Number) and not isinstance(max_iterations, int):
-            warn("Received a non-integer value for max_iterations: {}. Casting to integer.".format(max_iterations))
+                "Expected a positive integer for max_iterations instead got: {}".format(
+                    max_iterations
+                )
+            )
+        elif isinstance(max_iterations, numbers.Number) and not isinstance(
+            max_iterations, int
+        ):
+            warn(
+                "Received a non-integer value for max_iterations: {}. Casting to integer.".format(
+                    max_iterations
+                )
+            )
             max_iterations = int(max_iterations)
 
-        if tolerance is not None and (not isinstance(tolerance, numbers.Number) or tolerance < 0):
+        if tolerance is not None and (
+            not isinstance(tolerance, numbers.Number) or tolerance < 0
+        ):
             raise ValueError(
-                "Expected a positive float for tolerance instead got: {}".format(tolerance))
+                "Expected a positive float for tolerance instead got: {}".format(
+                    tolerance
+                )
+            )
 
         if w is not None and (not isinstance(w, numbers.Number) or w < 0 or w >= 1):
             raise ValueError(
-                "Expected a value between 0 (inclusive) and 1 (exclusive) for w instead got: {}".format(w))
+                "Expected a value between 0 (inclusive) and 1 (exclusive) for w instead got: {}".format(
+                    w
+                )
+            )
 
         self.X = X
         self.Y = Y
@@ -210,8 +256,8 @@ class EMRegistration(object):
         self.diff = np.inf
         self.q = np.inf
         self.P = np.zeros((self.M, self.N))
-        self.Pt1 = np.zeros((self.N, ))
-        self.P1 = np.zeros((self.M, ))
+        self.Pt1 = np.zeros((self.N,))
+        self.P1 = np.zeros((self.M,))
         self.PX = np.zeros((self.M, self.D))
         self.Np = 0
 
@@ -224,21 +270,25 @@ class EMRegistration(object):
         callback: function
             A function that will be called after each iteration.
             Can be used to visualize the registration process.
-        
+
         Returns
         -------
         self.TY: numpy array
             MxD array of transformed source points.
-        
+
         registration_parameters:
-            Returned params dependent on registration method used. 
+            Returned params dependent on registration method used.
         """
         self.transform_point_cloud()
         while self.iteration < self.max_iterations and self.diff > self.tolerance:
             self.iterate()
             if callable(callback):
-                kwargs = {'iteration': self.iteration,
-                          'error': self.q, 'X': self.X, 'Y': self.TY}
+                kwargs = {
+                    "iteration": self.iteration,
+                    "error": self.q,
+                    "X": self.X,
+                    "Y": self.TY,
+                }
                 callback(**kwargs)
 
         return self.TY, self.get_registration_parameters()
@@ -248,28 +298,32 @@ class EMRegistration(object):
         Placeholder for child classes.
         """
         raise NotImplementedError(
-            "Registration parameters should be defined in child classes.")
+            "Registration parameters should be defined in child classes."
+        )
 
     def update_transform(self):
         """
         Placeholder for child classes.
         """
         raise NotImplementedError(
-            "Updating transform parameters should be defined in child classes.")
+            "Updating transform parameters should be defined in child classes."
+        )
 
     def transform_point_cloud(self):
         """
         Placeholder for child classes.
         """
         raise NotImplementedError(
-            "Updating the source point cloud should be defined in child classes.")
+            "Updating the source point cloud should be defined in child classes."
+        )
 
     def update_variance(self):
         """
         Placeholder for child classes.
         """
         raise NotImplementedError(
-            "Updating the Gaussian variance for the mixture model should be defined in child classes.")
+            "Updating the Gaussian variance for the mixture model should be defined in child classes."
+        )
 
     def iterate(self):
         """
@@ -283,11 +337,17 @@ class EMRegistration(object):
         """
         Compute the expectation step of the EM algorithm.
         """
-        P = np.sum((self.X[None, :, :] - self.TY[:, None, :])**2, axis=2) # (M, N)
-        P = np.exp(-P/(2*self.sigma2))
-        c = (2*np.pi*self.sigma2)**(self.D/2)*self.w/(1. - self.w)*self.M/self.N
+        P = np.sum((self.X[None, :, :] - self.TY[:, None, :]) ** 2, axis=2)  # (M, N)
+        P = np.exp(-P / (2 * self.sigma2))
+        c = (
+            (2 * np.pi * self.sigma2) ** (self.D / 2)
+            * self.w
+            / (1.0 - self.w)
+            * self.M
+            / self.N
+        )
 
-        den = np.sum(P, axis = 0, keepdims = True) # (1, N)
+        den = np.sum(P, axis=0, keepdims=True)  # (1, N)
         den = np.clip(den, np.finfo(self.X.dtype).eps, None) + c
 
         self.P = np.divide(P, den)
@@ -304,6 +364,7 @@ class EMRegistration(object):
         self.transform_point_cloud()
         self.update_variance()
 
+
 class DeformableRegistration(EMRegistration):
     """
     Deformable registration.
@@ -315,23 +376,31 @@ class DeformableRegistration(EMRegistration):
 
     beta: float(positive)
         Width of the Gaussian kernel.
-    
+
     low_rank: bool
         Whether to use low rank approximation.
-    
+
     num_eig: int
         Number of eigenvectors to use in lowrank calculation.
     """
 
-    def __init__(self, alpha=None, beta=None, low_rank=False, num_eig=100, *args, **kwargs):
+    def __init__(
+        self, alpha=None, beta=None, low_rank=False, num_eig=100, *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         if alpha is not None and (not isinstance(alpha, numbers.Number) or alpha <= 0):
             raise ValueError(
-                "Expected a positive value for regularization parameter alpha. Instead got: {}".format(alpha))
+                "Expected a positive value for regularization parameter alpha. Instead got: {}".format(
+                    alpha
+                )
+            )
 
         if beta is not None and (not isinstance(beta, numbers.Number) or beta <= 0):
             raise ValueError(
-                "Expected a positive value for the width of the coherent Gaussian kerenl. Instead got: {}".format(beta))
+                "Expected a positive value for the width of the coherent Gaussian kerenl. Instead got: {}".format(
+                    beta
+                )
+            )
 
         self.alpha = 2 if alpha is None else alpha
         self.beta = 2 if beta is None else beta
@@ -341,9 +410,9 @@ class DeformableRegistration(EMRegistration):
         self.num_eig = num_eig
         if self.low_rank is True:
             self.Q, self.S = low_rank_eigen(self.G, self.num_eig)
-            self.inv_S = np.diag(1./self.S)
+            self.inv_S = np.diag(1.0 / self.S)
             self.S = np.diag(self.S)
-            self.E = 0.
+            self.E = 0.0
 
     def update_transform(self):
         """
@@ -352,8 +421,9 @@ class DeformableRegistration(EMRegistration):
 
         """
         if self.low_rank is False:
-            A = np.dot(np.diag(self.P1), self.G) + \
-                self.alpha * self.sigma2 * np.eye(self.M)
+            A = np.dot(np.diag(self.P1), self.G) + self.alpha * self.sigma2 * np.eye(
+                self.M
+            )
             B = self.PX - np.dot(np.diag(self.P1), self.Y)
             self.W = np.linalg.solve(A, B)
 
@@ -364,11 +434,29 @@ class DeformableRegistration(EMRegistration):
             dPQ = np.matmul(dP, self.Q)
             F = self.PX - np.matmul(dP, self.Y)
 
-            self.W = 1 / (self.alpha * self.sigma2) * (F - np.matmul(dPQ, (
-                np.linalg.solve((self.alpha * self.sigma2 * self.inv_S + np.matmul(self.Q.T, dPQ)),
-                                (np.matmul(self.Q.T, F))))))
+            self.W = (
+                1
+                / (self.alpha * self.sigma2)
+                * (
+                    F
+                    - np.matmul(
+                        dPQ,
+                        (
+                            np.linalg.solve(
+                                (
+                                    self.alpha * self.sigma2 * self.inv_S
+                                    + np.matmul(self.Q.T, dPQ)
+                                ),
+                                (np.matmul(self.Q.T, F)),
+                            )
+                        ),
+                    )
+                )
+            )
             QtW = np.matmul(self.Q.T, self.W)
-            self.E = self.E + self.alpha / 2 * np.trace(np.matmul(QtW.T, np.matmul(self.S, QtW)))
+            self.E = self.E + self.alpha / 2 * np.trace(
+                np.matmul(QtW.T, np.matmul(self.S, QtW))
+            )
 
     def transform_point_cloud(self, Y=None):
         """
@@ -380,12 +468,12 @@ class DeformableRegistration(EMRegistration):
             Array of points to transform - use to predict on new set of points.
             Best for predicting on new points not used to run initial registration.
                 If None, self.Y used.
-        
+
         Returns
         -------
         If Y is None, returns None.
         Otherwise, returns the transformed Y.
-                
+
 
         """
         if Y is not None:
@@ -396,9 +484,10 @@ class DeformableRegistration(EMRegistration):
                 self.TY = self.Y + np.dot(self.G, self.W)
 
             elif self.low_rank is True:
-                self.TY = self.Y + np.matmul(self.Q, np.matmul(self.S, np.matmul(self.Q.T, self.W)))
+                self.TY = self.Y + np.matmul(
+                    self.Q, np.matmul(self.S, np.matmul(self.Q.T, self.W))
+                )
                 return
-
 
     def update_variance(self):
         """
@@ -413,10 +502,12 @@ class DeformableRegistration(EMRegistration):
         # the Gaussian kernel used for regularization.
         self.q = np.inf
 
-        xPx = np.dot(np.transpose(self.Pt1), np.sum(
-            np.multiply(self.X, self.X), axis=1))
-        yPy = np.dot(np.transpose(self.P1),  np.sum(
-            np.multiply(self.TY, self.TY), axis=1))
+        xPx = np.dot(
+            np.transpose(self.Pt1), np.sum(np.multiply(self.X, self.X), axis=1)
+        )
+        yPy = np.dot(
+            np.transpose(self.P1), np.sum(np.multiply(self.TY, self.TY), axis=1)
+        )
         trPXY = np.sum(np.multiply(self.TY, self.PX))
 
         self.sigma2 = (xPx - 2 * trPXY + yPy) / (self.Np * self.D)
@@ -442,4 +533,3 @@ class DeformableRegistration(EMRegistration):
             Deformable transformation matrix.
         """
         return self.G, self.W
-
