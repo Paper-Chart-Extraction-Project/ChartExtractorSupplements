@@ -25,6 +25,19 @@ def read_json(json_filepath: Path) -> Dict:
     return json.loads(open(json_filepath, 'r').read())
 
 
+def validate_model_metadata(metadata: Dict):
+    """Validates the metadata file."""
+    needed_keys: List[str] = [
+        "image_size",
+        "horizontal_overlap_ratio",
+        "vertical_overlap_ratio",
+        "names"
+    ]
+    for key in needed_keys:
+        if metadata.get(key) is None:
+            raise KeyError(f"Necessary key {key} does not exist in the model metadata.")
+
+
 def validate_filepath(path_str: str, must_already_exist: bool) -> Path:
     """Validates and creates a path object from a string."""
     path: Path = Path(path_str)
@@ -62,7 +75,8 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-metadata = read_json(args.model_metadata_path)
+metadata: Dict = read_json(args.model_metadata_path)
+validate_model_metadata(metadata)
 
 model: UltralyticsYOLOv8 = UltralyticsYOLOv8.from_weights_path(args.yolo_weights_path)
 image: Image.Image = Image.open(args.image_path)
