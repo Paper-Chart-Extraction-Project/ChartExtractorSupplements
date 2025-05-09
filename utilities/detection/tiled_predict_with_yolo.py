@@ -1,6 +1,5 @@
 """Uses tiling and yolo to identify objects on an image and save them to a yolo formatted label."""
 
-
 import argparse
 from ChartExtractor.object_detection_models.ultralytics_yolov8 import UltralyticsYOLOv8
 from ChartExtractor.utilities.annotations import BoundingBox
@@ -22,7 +21,7 @@ from typing import Dict, List
 
 def read_json(json_filepath: Path) -> Dict:
     """Reads a json file to a dictionary."""
-    return json.loads(open(json_filepath, 'r').read())
+    return json.loads(open(json_filepath, "r").read())
 
 
 def validate_model_metadata(metadata: Dict):
@@ -31,7 +30,7 @@ def validate_model_metadata(metadata: Dict):
         "image_size",
         "horizontal_overlap_ratio",
         "vertical_overlap_ratio",
-        "names"
+        "names",
     ]
     for key in needed_keys:
         if metadata.get(key) is None:
@@ -59,17 +58,17 @@ parser.add_argument(
 parser.add_argument(
     "yolo_weights_path",
     type=partial(validate_filepath, must_already_exist=True),
-    help="The path to the yolo model weights."
+    help="The path to the yolo model weights.",
 )
 parser.add_argument(
     "model_metadata_path",
     type=partial(validate_filepath, must_already_exist=True),
-    help="The path to the model's metadata."
+    help="The path to the model's metadata.",
 )
 parser.add_argument(
     "output_filepath",
     type=partial(validate_filepath, must_already_exist=False),
-    help="The path to where the output should go."
+    help="The path to where the output should go.",
 )
 
 args = parser.parse_args()
@@ -88,8 +87,7 @@ image_tiles: List[List[Image.Image]] = tile_image(
     metadata["vertical_overlap_ratio"],
 )
 detections: List[List[List[Detection]]] = [
-    [model(pil_to_cv2(tile), verbose=False)[0] for tile in row]
-    for row in image_tiles
+    [model(pil_to_cv2(tile), verbose=False)[0] for tile in row] for row in image_tiles
 ]
 detections: List[Detection] = untile_detections(
     detections,
@@ -102,7 +100,7 @@ detections: List[Detection] = non_maximum_suppression(
     detections,
     threshold=0.8,
     overlap_comparator=intersection_over_minimum,
-    sorting_fn=lambda det: det.annotation.area * det.confidence
+    sorting_fn=lambda det: det.annotation.area * det.confidence,
 )
 predictions: List[BoundingBox] = [det.annotation for det in detections]
 yolo_output: str = "\n".join(
@@ -110,11 +108,12 @@ yolo_output: str = "\n".join(
         p.to_yolo(
             image.size[0],
             image.size[1],
-            {val:key for (key, val) in metadata["names"].items()}
+            {val: key for (key, val) in metadata["names"].items()},
         )
         for p in predictions
     ]
 )
 
-with open(args.output_filepath, 'w') as f:
+
+with open(args.output_filepath, "w") as f:
     f.write(yolo_output)
