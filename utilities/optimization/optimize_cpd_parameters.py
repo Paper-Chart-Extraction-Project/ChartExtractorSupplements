@@ -17,6 +17,7 @@ import numbers
 import numpy as np
 import optuna
 from pathlib import Path
+import random
 import re
 from typing import Callable, Dict, List, Optional
 from warnings import warn
@@ -577,7 +578,7 @@ alpha_upper_bound_help_text: str = "The upper bound to search for the alpha valu
 alpha_upper_bound_help_text += "(called lambda in the paper). Defaults to 1e20."
 parser.add_argument(
     "--alpha_upper_bound",
-    type=int,
+    type=float,
     default=1e20,
     help=alpha_upper_bound_help_text,
 )
@@ -585,23 +586,48 @@ alpha_lower_bound_help_text: str = "The lower bound to search for the alpha valu
 alpha_lower_bound_help_text += "(called lambda in the paper). Defaults to 1e-20."
 parser.add_argument(
     "--alpha_lower_bound",
-    type=int,
+    type=float,
     default=1e-20,
     help=alpha_lower_bound_help_text,
 )
 parser.add_argument(
     "--beta_upper_bound",
-    type=int,
+    type=float,
     default=1e5,
     help="The upper bound to search for the beta value. Defaults to 1e5.",
 )
 parser.add_argument(
     "--beta_lower_bound",
-    type=int,
+    type=float,
     default=1e-5,
     help="The upper bound to search for the beta value. Defaults to 1e-5.",
 )
-
+parser.add_argument(
+    "--tolerance_upper_bound",
+    type=float,
+    default=1e-1,
+    help="The upper bound to search for the tolerance value. Defaults to 1e-1."
+)
+parser.add_argument(
+    "--tolerance_lower_bound",
+    type=float,
+    default=1e-8,
+    help="The lower bound to search for the tolerance value. Defaults to 1e-8."
+)
+parser.add_argument(
+    "--random_proportion_to_delete",
+    type=float,
+    default=0,
+    help="The proportion of points to randomly delete in order to simulate false negatives."
+)
+random_add_help_txt = "The proportion of points to randomly add in order to simulate false "
+random_add_help_txt += "positives. Samples from a uniform distribution."
+parser.add_argument(
+    "--random_proportion_to_add",
+    type=float,
+    default=0,
+    help=random_add_help_txt
+)
 args = parser.parse_args()
 
 # Optimization logic
@@ -610,6 +636,25 @@ image_name_regex_pattern: str = r"RC_\d\d\d\d_intraoperative.JPG"
 scanned_chart_regex_pattern: str = (
     r"unified_intraoperative_preoperative_flowsheet_v1_1_(front|back)\.(png|jpg)"
 )
+
+
+def randomly_delete_and_add_points(points: List):
+    """Randomly deletes and adds points to simulate error."""
+    len_points = len(points)
+    num_to_delete = round(len_points * args.random_proportion_to_delete)
+    num_to_add = round(len_points * args.random_proportion_to_add)
+
+    indices_to_delete = np.random.choice(len_points, num_to_delete, replace=False)
+    points_to_add = list(zip(
+        [random.uniform(0.0, 1.0) for x in range(num_to_add)],
+        [random.uniform(0.0, 1.0) for y in range(num_to_add)]
+    ))
+    points_to_add = [NamedPoint("", p[0], p[1]) for p in points_to_add]
+    points = list(enumerate(points))
+    points = list(filter(lambda p: p[0] not in indices_to_delete, points))
+    points = [p[1] for p in points]
+    points += points_to_add
+    return points
 
 
 def read_json_data(path: Path) -> Dict:
@@ -666,6 +711,7 @@ def create_deformable_registration(
     Y: List[NamedPoint],
     alpha: float,
     beta: float,
+    tolerance: float,
 ) -> DeformableRegistration:
     """Creates a DeformableRegistration object from the given parameters."""
     return DeformableRegistration(
@@ -673,6 +719,7 @@ def create_deformable_registration(
         Y=named_point_list_to_numpy_array(Y),
         alpha=alpha,
         beta=beta,
+        tolerance=tolerance,
     )
 
 
@@ -681,18 +728,30 @@ def compute_matching_accuracy(
     Y: List[NamedPoint],
     alpha: float,
     beta: float,
+    tolerance: float,
     dist_func: Callable[[NamedPoint, NamedPoint], float] = distance,
     err_func: Callable[[float], float] = lambda err: err,
 ) -> float:
     """Computes the error for a CPD matching."""
-    def_reg: DeformableRegistration = create_deformable_registration(X, Y, alpha, beta)
+    def_reg: DeformableRegistration = create_deformable_registration(
+        X,
+        randomly_delete_and_add_points(Y),
+        alpha,
+        beta,
+        tolerance
+    )
     def_reg.register()
     transformed_points: List[NamedPoint] = [
         NamedPoint(name, point[0], point[1])
-        for (name, point) in list(zip([np.name for np in X], def_reg.TY.tolist()))
+        for (name, point) in list(
+            zip(
+                [np.name for np in Y],
+                def_reg.transform_point_cloud(named_point_list_to_numpy_array(Y))
+            )
+        )
     ]
     errors: List[float] = [
-        distance(np1, np2) for (np1, np2) in list(zip(transformed_points, Y))
+        distance(np1, np2) for (np1, np2) in list(zip(transformed_points, X))
     ]
     return sum(err_func(e) for e in errors)
 
@@ -729,8 +788,18 @@ def objective(trial):
     beta: float = trial.suggest_float(
         "beta", args.beta_lower_bound, args.beta_upper_bound
     )
+    tolerance: float = trial.suggest_float(
+        "tolerance", args.tolerance_lower_bound, args.tolerance_upper_bound
+    )
+    
     accuracies: List[float] = [
-        compute_matching_accuracy(v, perfect_points, alpha, beta)
+        compute_matching_accuracy(
+            perfect_points,
+            v,
+            alpha,
+            beta,
+            tolerance
+        )
         for v in regular_points.values()
     ]
     return np.mean(accuracies)
