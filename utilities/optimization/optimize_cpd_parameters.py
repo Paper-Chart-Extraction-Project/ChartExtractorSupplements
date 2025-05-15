@@ -701,6 +701,13 @@ def named_point_list_to_numpy_array(named_points: List[NamedPoint]) -> np.array:
     return np.array([[np.x, np.y] for np in named_points])
 
 
+def filter_unique_namedpoints(named_points: List[NamedPoint]) -> List[NamedPoint]:
+    """Filters a list of NamedPoints for only those which are unique by name."""
+    names = [np.name for np in named_points]
+    unique_names = list(filter(lambda n: names.count(n) == 1, names))
+    return list(filter(lambda np: np.name in unique_names, named_points))
+
+
 def distance(np1: NamedPoint, np2: NamedPoint) -> float:
     """Calculates the euclidean distance between two NamedPoints."""
     return np.sqrt((np1.x - np2.x) ** 2 + (np1.y - np2.y) ** 2)
@@ -776,8 +783,13 @@ except:
     raise Error("Cannot find the scanned chart labels.")
 
 perfect_points: List[NamedPoint] = image_name_to_points_map[perfect_points_key]
+perfect_points: List[NamedPoint] = sorted(
+    filter_unique_namedpoints(perfect_points),
+    key=lambda np: np.name
+)
 regular_points: Dict[str, List[NamedPoint]] = {
-    k: v for (k, v) in image_name_to_points_map.items() if k != perfect_points_key
+    k: sorted(filter_unique_namedpoints(v), key=lambda np: np.name)
+    for (k, v) in image_name_to_points_map.items() if k != perfect_points_key
 }
 
 
